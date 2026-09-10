@@ -136,8 +136,6 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px}
       <select id="sizing"><option value="source" selected>Source grid</option><option value="fit">Fit footprint</option></select></div>
     <div class="row" id="sourcecellrow"><label for="sourcecell">Source px per cell</label><input type="number" id="sourcecell" value="8" min="1" max="1024" step="1"></div>
     <p class="hint" id="sourcegridhint">Source pixels per isometric cell. Align points to your SVG frame's grid; its origin and spacing are preserved.</p>
-    <div class="row" id="rotationrow"><label for="rotation">Icon orientation</label>
-      <select id="rotation"><option value="auto">Auto align</option><option value="0" selected>Original</option><option value="45">45°</option><option value="90">90°</option><option value="135">135°</option><option value="180">180°</option><option value="225">225°</option><option value="270">270°</option><option value="315">315°</option></select></div>
     <div class="row"><label for="direction">Direction</label>
       <select id="direction"><option value="original" selected>Original</option><option value="mirrored">Mirrored</option></select></div>
     <div class="row"><label for="cw">Footprint, cells across</label>
@@ -421,21 +419,6 @@ function build(){
 
   /* normalise into cell units, cw cells across the widest axis */
   if(mode==="extrude"){
-    const rotation=$("rotation").value;
-    let angle=Number(rotation)||0;
-    if(rotation==="auto"){
-      let sx=0,sy=0,weight=0;
-      for(const r of rings) for(let i=0;i<r.length;i++){
-        const p=r[i],q=r[(i+1)%r.length],dx=q.x-p.x,dy=q.y-p.y;
-        const w=Math.hypot(dx,dy),a=Math.atan2(dy,dx);
-        sx+=w*Math.cos(4*a);sy+=w*Math.sin(4*a);weight+=w;
-      }
-      // Only auto-align outlines with a clear pair of perpendicular directions.
-      if(weight&&Math.hypot(sx,sy)/weight>.75) angle=-Math.atan2(sy,sx)*45/Math.PI;
-    }
-    const a=angle*Math.PI/180,c=Math.cos(a),s=Math.sin(a);
-    rings=rings.map(r=>r.map(p=>({x:p.x*c-p.y*s,y:p.x*s+p.y*c})));
-    note.push(["Orientation",rotation==="auto"?`auto · ${f2(angle)}°`:`${angle}°`]);
     if(sourceGrid){
       const unit=Number($("sourcecell").value);
       if(!Number.isFinite(unit)||unit<=0)return {err:"Enter a positive source-pixel size for one grid cell.",svg:""};
@@ -647,7 +630,6 @@ function render(){
   $("sourcegridhint").hidden=!sourceGrid;
   $("cw").closest(".row").hidden=sourceGrid;
   $("ch").closest(".row").hidden=extrude;
-  $("rotationrow").hidden=!extrude;
   for(const id of ["ring2","face","iconscale","keepcolor"]) $(id).closest(".row").hidden=extrude;
   $("modehint").textContent=extrude
     ? "Your icon's silhouette becomes the 3D object, with 7:4 projection, extrusion and Slate face shading. Upload an SVG to replace the example."
@@ -690,7 +672,7 @@ document.querySelectorAll("#mode button").forEach(b=>b.addEventListener("click",
 document.querySelectorAll(".stepper button").forEach(b=>b.addEventListener("click",()=>{
   const f=$(b.dataset.t); f.value=Math.max(+f.min,Math.min(+f.max,+f.value+ +b.dataset.step)); render();
 }));
-["sizing","sourcecell","rotation","cw","ch","depth","grid","bgstep","scale","direction","hi","accfill","size","ring2","shadow","fade","dash","face","iconscale","keepcolor","preset"]
+["sizing","sourcecell","cw","ch","depth","grid","bgstep","scale","direction","hi","accfill","size","ring2","shadow","fade","dash","face","iconscale","keepcolor","preset"]
   .forEach(id=>$(id).addEventListener("input",render));
 $("svgin").addEventListener("input",()=>{ if($("svgin").value.trim()){$("preset").value="custom";} render(); });
 $("svgfile").addEventListener("change",async e=>{
