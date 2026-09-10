@@ -136,6 +136,8 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px}
       <select id="sizing"><option value="source" selected>Source grid</option><option value="fit">Fit footprint</option></select></div>
     <div class="row" id="sourcecellrow"><label for="sourcecell">Source px per cell</label><input type="number" id="sourcecell" value="8" min="1" max="1024" step="1"></div>
     <p class="hint" id="sourcegridhint">Source pixels per isometric cell. Align points to your SVG frame's grid; its origin and spacing are preserved.</p>
+    <div class="row"><label for="alignbase">Align base to grid</label><input type="checkbox" id="alignbase"></div>
+    <p class="hint">Places the lowest base corner on a grid intersection. Moves the whole icon without changing its shape.</p>
     <div class="row"><label for="direction">Direction</label>
       <select id="direction"><option value="original" selected>Original</option><option value="mirrored">Mirrored</option></select></div>
     <div class="row"><label for="cw">Footprint, cells across</label>
@@ -461,6 +463,17 @@ function build(){
   if(flip) prj=prj.map(r=>r.map(p=>({x:-p.x,y:p.y})).reverse());
 
   const D=depth*VZ;
+  if($("alignbase").checked){
+    // Anchor the frontmost base corner, translating every contour together.
+    const anchor=prj.flat().reduce((a,p)=>p.y>a.y+1e-7||(Math.abs(p.y-a.y)<1e-7&&p.x<a.x)?p:a);
+    const base={x:anchor.x,y:anchor.y+D};
+    const u=(base.x/AX.x+base.y/AX.y)/2;
+    const v=(base.y/AX.y-base.x/AX.x)/2;
+    const target=project(Math.round(u),Math.round(v));
+    const dx=target.x-base.x,dy=target.y-base.y;
+    prj=prj.map(r=>r.map(p=>({x:p.x+dx,y:p.y+dy})));
+    note.push(["Base alignment","Lowest base corner aligned to grid"]);
+  }
   /* walls: contiguous runs of edges whose extruded quad faces the viewer */
   const wallsNear=[], wallsFar=[],wallRuns=[];
   for(const r of prj){
@@ -685,7 +698,7 @@ document.querySelectorAll("#mode button").forEach(b=>b.addEventListener("click",
 document.querySelectorAll(".stepper button").forEach(b=>b.addEventListener("click",()=>{
   const f=$(b.dataset.t); f.value=Math.max(+f.min,Math.min(+f.max,+f.value+ +b.dataset.step)); render();
 }));
-["sizing","sourcecell","cw","ch","depth","bgstep","scale","direction","hi","accfill","size","ring2","shadow","fade","dash","face","iconscale","keepcolor","preset"]
+["sizing","sourcecell","cw","ch","depth","alignbase","bgstep","scale","direction","hi","accfill","size","ring2","shadow","fade","dash","face","iconscale","keepcolor","preset"]
   .forEach(id=>$(id).addEventListener("input",render));
 $("svgin").addEventListener("input",()=>{ if($("svgin").value.trim()){$("preset").value="custom";} render(); });
 $("svgfile").addEventListener("change",async e=>{
