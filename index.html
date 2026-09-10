@@ -145,7 +145,6 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px}
     <div class="row"><label for="depth">Extrusion, cells</label>
       <div class="stepper"><button type="button" data-step="-1" data-t="depth">−</button><input type="number" id="depth" value="1" min="0" max="24" step="1"><button type="button" data-step="1" data-t="depth">+</button></div></div>
     <p class="hint">Depth is whole cells only — 1 cell = 32px vertical, so every corner lands on an intersection.</p>
-    <div class="row"><label for="grid">Show grid</label><a href="https://www.figma.com/design/zdBO8o3q9NIsaJMnwymFh8/?node-id=386-88855" target="_blank" rel="noopener" style="font-size:11px;color:var(--muted)">Your Figma grid ↗</a><input type="checkbox" id="grid" checked></div>
   </fieldset>
 
   <fieldset>
@@ -182,7 +181,7 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px}
       <span class="k">top face <b id="tf">168 × 96</b></span>
       <span class="k">vertices <b id="vc">—</b></span>
       <span class="push"></span>
-      <label class="grid-toggle"><input type="checkbox" id="previewgrid" checked>Show grid</label><a href="https://www.figma.com/design/zdBO8o3q9NIsaJMnwymFh8/?node-id=386-88855" target="_blank" rel="noopener" style="font-size:11px;color:var(--muted)">Your Figma grid ↗</a>
+      <label class="grid-toggle"><input type="checkbox" id="previewgrid" checked><span id="gridlabel">Grid on</span></label>
       <button class="btn ghost" type="button" id="expandpreview" aria-expanded="false">Expand preview</button>
       <button class="btn ghost" type="button" id="copysvg">Copy SVG</button>
     </div>
@@ -488,9 +487,10 @@ function build(){
   /* background */
   L.push(`<rect id="Background" x="${vb[0]}" y="${vb[1]}" width="${vb[2]}" height="${vb[3]}" fill="${BG}"/>`);
 
-  /* Original Figma vector grid, node 386:88855. Repeat a native 56×32 cell.
+  /* Grid source: https://www.figma.com/design/zdBO8o3q9NIsaJMnwymFh8/?node-id=386-88855
+     Original Figma vector grid, node 386:88855. Repeat a native 56×32 cell.
      The crop aligns its major-line intersection to the projection origin. */
-  if($("grid").checked){
+  if($("previewgrid").checked){
     L.push(`<g id="Grid"><defs><pattern id="figma-grid" patternUnits="userSpaceOnUse" width="56" height="32"><g fill="none" transform="translate(-56 -60)"><path d="M91 64L42 36" stroke="#B0B0B0" stroke-width="0.1"/><path d="M91 72L42 44" stroke="#B0B0B0" stroke-width="0.1"/><path d="M91 80L42 52" stroke="#B0B0B0" stroke-width="0.1"/><path d="M91 88L42 60" stroke="#B0B0B0" stroke-width="0.1"/><path d="M91 96L42 68" stroke="#B0B0B0" stroke-width="0.1"/><path d="M91 104L42 76" stroke="#B0B0B0" stroke-width="0.1"/><path d="M91 112L42 84" stroke="#B0B0B0" stroke-width="0.1"/><path d="M42 92L91 64" stroke="#B0B0B0" stroke-width="0.1"/><path d="M42 100L91 72" stroke="#B0B0B0" stroke-width="0.1"/><path d="M42 108L91 80" stroke="#B0B0B0" stroke-width="0.1"/><path d="M42 116L91 88" stroke="#B0B0B0" stroke-width="0.1"/><path d="M42 84L91 56" stroke="#B0B0B0" stroke-width="0.1"/><path d="M42 76L91 48" stroke="#B0B0B0" stroke-width="0.1"/><path d="M42 68L91 40" stroke="#B0B0B0" stroke-width="0.1"/><path d="M42 116L91 88" stroke="#B0B0B0" stroke-width="0.1"/><path d="M133 72L84 44" stroke="#B0B0B0" stroke-width="0.1"/><path d="M133 80L84 52" stroke="#B0B0B0" stroke-width="0.1"/><path d="M133 88L84 60" stroke="#B0B0B0" stroke-width="0.1"/><path d="M133 96L84 68" stroke="#B0B0B0" stroke-width="0.1"/><path d="M133 104L84 76" stroke="#B0B0B0" stroke-width="0.1"/><path d="M133 112L84 84" stroke="#B0B0B0" stroke-width="0.1"/><path d="M84 92L133 64" stroke="#B0B0B0" stroke-width="0.1"/><path d="M84 100L133 72" stroke="#B0B0B0" stroke-width="0.1"/><path d="M84 108L133 80" stroke="#B0B0B0" stroke-width="0.1"/><path d="M84 84L133 56" stroke="#B0B0B0" stroke-width="0.1"/><path d="M84 76L133 48" stroke="#B0B0B0" stroke-width="0.1"/><path d="M84 68L133 40" stroke="#B0B0B0" stroke-width="0.1"/><path d="M84 60L133 32" stroke="#B0B0B0" stroke-width="0.1"/><path d="M133 120L84 92" stroke="#B0B0B0" stroke-width="0.1"/><path d="M98 68L0 12" stroke="#FF5353" stroke-width="0.2"/><path d="M98 84L0 28" stroke="#FF5353" stroke-width="0.2"/><path d="M98 100L0 44" stroke="#FF5353" stroke-width="0.2"/><path d="M98 116L0 60" stroke="#FF5353" stroke-width="0.2"/><path d="M0 124L98 68" stroke="#FF5353" stroke-width="0.2"/><path d="M0 140L98 84" stroke="#FF5353" stroke-width="0.2"/><path d="M0 108L98 52" stroke="#FF5353" stroke-width="0.2"/><path d="M0 92L98 36" stroke="#FF5353" stroke-width="0.2"/><path d="M182 100L84 44" stroke="#FF5353" stroke-width="0.2"/><path d="M182 116L84 60" stroke="#FF5353" stroke-width="0.2"/><path d="M182 132L84 76" stroke="#FF5353" stroke-width="0.2"/><path d="M182 148L84 92" stroke="#FF5353" stroke-width="0.2"/><path d="M84 108L182 52" stroke="#FF5353" stroke-width="0.2"/><path d="M84 92L182 36" stroke="#FF5353" stroke-width="0.2"/><path d="M84 76L182 20" stroke="#FF5353" stroke-width="0.2"/><path d="M84 60L182 4" stroke="#FF5353" stroke-width="0.2"/><path d="M196 108L0 -4" stroke="#898989" stroke-width="0.4"/><path d="M196 140L0 28" stroke="#898989" stroke-width="0.4"/><path d="M196 172L0 60" stroke="#898989" stroke-width="0.4"/><path d="M0 156L196 44" stroke="#898989" stroke-width="0.4"/><path d="M0 124L196 12" stroke="#898989" stroke-width="0.4"/><path d="M0 92L196 -20" stroke="#898989" stroke-width="0.4"/></g></pattern></defs><rect x="${vb[0]}" y="${vb[1]}" width="${vb[2]}" height="${vb[3]}" fill="url(#figma-grid)"/></g>`);
   }
 
@@ -622,7 +622,7 @@ function currentSVG(){
 /* ---------- render ---------- */
 let lastSVG="";
 function render(){
-  $("previewgrid").checked=$("grid").checked;
+  $("gridlabel").textContent=$("previewgrid").checked?"Grid on":"Grid off";
   const extrude=state.mode==="extrude";
   const sourceGrid=extrude&&$("sizing").value==="source";
   $("sizingrow").hidden=!extrude;
@@ -652,7 +652,7 @@ function render(){
 }
 
 /* ---------- wiring ---------- */
-$("previewgrid").addEventListener("change",()=>{$("grid").checked=$("previewgrid").checked;render();});
+$("previewgrid").addEventListener("change",render);
 function expandPreview(expand){
   $("view").closest(".canvas").classList.toggle("expanded",expand);
   $("expandpreview").textContent=expand?"Exit large preview":"Expand preview";
@@ -672,7 +672,7 @@ document.querySelectorAll("#mode button").forEach(b=>b.addEventListener("click",
 document.querySelectorAll(".stepper button").forEach(b=>b.addEventListener("click",()=>{
   const f=$(b.dataset.t); f.value=Math.max(+f.min,Math.min(+f.max,+f.value+ +b.dataset.step)); render();
 }));
-["sizing","sourcecell","cw","ch","depth","grid","bgstep","scale","direction","hi","accfill","size","ring2","shadow","fade","dash","face","iconscale","keepcolor","preset"]
+["sizing","sourcecell","cw","ch","depth","bgstep","scale","direction","hi","accfill","size","ring2","shadow","fade","dash","face","iconscale","keepcolor","preset"]
   .forEach(id=>$(id).addEventListener("input",render));
 $("svgin").addEventListener("input",()=>{ if($("svgin").value.trim()){$("preset").value="custom";} render(); });
 $("svgfile").addEventListener("change",async e=>{
