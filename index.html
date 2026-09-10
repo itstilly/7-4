@@ -1,0 +1,585 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Turn a 2D icon into spec-correct isometric SVG on the 7:4 grid — Laravel landing illustration system.">
+<style>:root{color-scheme:light dark}*,*::before,*::after{box-sizing:border-box}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>7:4 Iso Extruder</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root{
+  --s1:#fcfcfd; --s2:#f9f9fb; --s3:#f0f0f3; --s4:#e8e8ec; --s5:#e0e1e6;
+  --s6:#d9d9e0; --s7:#cdced6; --s8:#b9bbc6; --s9:#8b8d98; --s11:#60646c; --s12:#1c2024;
+  --cloud:#0057FF;
+  --bg:var(--s2); --panel:var(--s1); --line:var(--s6); --line-soft:var(--s4);
+  --ink:var(--s12); --ink-2:var(--s11); --ink-3:var(--s9);
+  --field:#fff; --accent:var(--cloud); --accent-ink:#fff; --accent-soft:#eaf1ff;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#111113; --panel:#18191b; --line:#363a3f; --line-soft:#272a2d;
+    --ink:#edeef0; --ink-2:#b0b4ba; --ink-3:#777b84;
+    --field:#0d0d0f; --accent:#3d7fff; --accent-ink:#0b1020; --accent-soft:#152444;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#111113; --panel:#18191b; --line:#363a3f; --line-soft:#272a2d;
+  --ink:#edeef0; --ink-2:#b0b4ba; --ink-3:#777b84;
+  --field:#0d0d0f; --accent:#3d7fff; --accent-ink:#0b1020; --accent-soft:#152444;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5}
+#stage{position:fixed;left:-99999px;top:0;width:1px;height:1px;overflow:hidden}
+
+.wrap{padding:0 16px;padding-block:0 24px;max-width:1400px;margin:0 auto}
+header.top{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 20px;padding-block:22px 16px;border-bottom:1px solid var(--line)}
+h1{font-family:var(--mono);font-size:17px;font-weight:600;letter-spacing:-.01em;margin:0}
+h1 b{color:var(--accent);font-weight:600}
+.sub{font-size:12.5px;color:var(--ink-3);margin:0}
+.sub a{color:var(--ink-2)}
+.themebtn{margin-left:auto;font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;background:none;border:1px solid var(--line);color:var(--ink-2);border-radius:2px;padding:5px 9px;cursor:pointer}
+.themebtn:hover{border-color:var(--ink-3);color:var(--ink)}
+
+main{display:grid;grid-template-columns:296px minmax(0,1fr);gap:20px;align-items:start;padding-top:20px}
+@media (max-width:920px){main{grid-template-columns:minmax(0,1fr)}}
+
+aside{display:flex;flex-direction:column;gap:2px}
+fieldset{border:0;border-top:1px solid var(--line);margin:0;padding:14px 0 16px;display:flex;flex-direction:column;gap:11px}
+fieldset:first-child{border-top:0;padding-top:0}
+legend{display:contents}
+.sect{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);display:flex;align-items:baseline;gap:7px}
+.sect s{flex:1;height:1px;background:var(--line-soft);text-decoration:none}
+.row{display:flex;align-items:center;gap:10px;justify-content:space-between}
+.row label{font-size:12.5px;color:var(--ink-2);flex:1;min-width:0}
+.hint{font-size:11.5px;color:var(--ink-3);margin:-4px 0 0}
+.tbd{font-family:var(--mono);font-size:9.5px;letter-spacing:.07em;color:var(--ink-3);border:1px solid var(--line);border-radius:2px;padding:1px 4px;text-transform:uppercase}
+
+input[type=text],input[type=number],select,textarea{font-family:var(--mono);font-size:12px;background:var(--field);color:var(--ink);border:1px solid var(--line);border-radius:2px;padding:5px 7px}
+input[type=number]{width:64px;text-align:right;font-variant-numeric:tabular-nums}
+select{width:118px}
+textarea{width:100%;min-height:74px;resize:vertical;line-height:1.45}
+input[type=range]{flex:1;min-width:0;accent-color:var(--accent)}
+input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+
+.seg{display:flex;border:1px solid var(--line);border-radius:2px;overflow:hidden}
+.seg button{flex:1;font-family:var(--mono);font-size:11px;padding:6px 4px;background:var(--field);color:var(--ink-2);border:0;border-left:1px solid var(--line);cursor:pointer}
+.seg button:first-child{border-left:0}
+.seg button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink)}
+.stepper{display:flex;align-items:center;gap:0}
+.stepper button{font-family:var(--mono);width:26px;height:26px;background:var(--field);border:1px solid var(--line);color:var(--ink);cursor:pointer;font-size:14px;line-height:1}
+.stepper input{border-radius:0;border-left:0;border-right:0;width:50px;height:26px}
+.stepper button:first-child{border-radius:2px 0 0 2px}
+.stepper button:last-child{border-radius:0 2px 2px 0}
+.file{font-family:var(--mono);font-size:11px;color:var(--ink-2)}
+.file::file-selector-button{font-family:var(--mono);font-size:11px;background:var(--panel);color:var(--ink-2);border:1px solid var(--line);border-radius:2px;padding:4px 7px;margin-right:8px;cursor:pointer}
+
+.canvas{background:var(--panel);border:1px solid var(--line);border-radius:3px;overflow:hidden}
+.cbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:9px 12px;border-bottom:1px solid var(--line)}
+.cbar .k{font-family:var(--mono);font-size:11px;color:var(--ink-3);letter-spacing:.04em}
+.cbar .k b{color:var(--ink-2);font-weight:500}
+.cbar .push{margin-left:auto}
+.btn{font-family:var(--mono);font-size:11.5px;letter-spacing:.03em;background:var(--accent);color:var(--accent-ink);border:0;border-radius:2px;padding:7px 12px;cursor:pointer;font-weight:500}
+.btn.ghost{background:transparent;color:var(--ink-2);border:1px solid var(--line)}
+.btn.ghost:hover{color:var(--ink);border-color:var(--ink-3)}
+.view{padding:22px 12px;display:flex;align-items:center;justify-content:center;min-height:300px;overflow-x:auto}
+.view svg{max-width:100%;height:auto;display:block}
+.notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0 26px;padding:12px 12px 14px;border-top:1px solid var(--line)}
+.notes p{margin:0;padding:5px 0;font-size:12px;color:var(--ink-3);display:flex;gap:8px;align-items:baseline}
+.notes p code{font-family:var(--mono);font-size:11px;color:var(--ink-2);white-space:nowrap}
+.out{margin-top:20px;border:1px solid var(--line);border-radius:3px;background:var(--panel)}
+.out .cbar{border-bottom:1px solid var(--line)}
+.out pre{margin:0;padding:12px;font-family:var(--mono);font-size:11px;color:var(--ink-2);max-height:190px;overflow:auto;white-space:pre;tab-size:2}
+.warn{font-size:12px;color:var(--ink-2);background:var(--accent-soft);border-left:2px solid var(--accent);padding:8px 10px;border-radius:0 2px 2px 0}
+</style>
+</head>
+<body>
+
+
+<div id="stage" aria-hidden="true"></div>
+
+<div class="wrap">
+<header class="top">
+  <h1>7:4 Iso Extruder <b>·</b> Cloud</h1>
+  <p class="sub">Every straight run is 7 across / 4 down — <a href="https://app.notion.com/p/3d43f372b48080358853dc454afbc647" target="_blank" rel="noopener">Landing illustrations</a></p>
+  <button class="themebtn" id="theme" type="button">Theme</button>
+</header>
+
+<main>
+<aside>
+  <fieldset>
+    <legend><span class="sect">Source<s></s></span></legend>
+    <div class="seg" role="group" id="mode">
+      <button type="button" data-m="tile" aria-pressed="true">Icon on tile</button>
+      <button type="button" data-m="extrude" aria-pressed="false">Extrude icon</button>
+    </div>
+    <p class="hint" id="modehint"></p>
+    <div class="row"><label for="preset">Preset</label>
+      <select id="preset"><option value="cloud">Cloud</option><option value="ring">Ring (hole)</option><option value="chip">Chip</option><option value="custom">Pasted SVG</option></select></div>
+    <textarea id="svgin" spellcheck="false" placeholder="Paste an icon's SVG here…"></textarea>
+    <input class="file" type="file" id="svgfile" accept=".svg,image/svg+xml">
+  </fieldset>
+
+  <fieldset>
+    <legend><span class="sect">Grid<s></s></span></legend>
+    <div class="row"><label for="cw">Footprint, cells across</label>
+      <div class="stepper"><button type="button" data-step="-1" data-t="cw">−</button><input type="number" id="cw" value="3" min="1" max="24" step="1"><button type="button" data-step="1" data-t="cw">+</button></div></div>
+    <div class="row"><label for="ch">Footprint, cells deep</label>
+      <div class="stepper"><button type="button" data-step="-1" data-t="ch">−</button><input type="number" id="ch" value="3" min="1" max="24" step="1"><button type="button" data-step="1" data-t="ch">+</button></div></div>
+    <div class="row"><label for="depth">Extrusion, cells</label>
+      <div class="stepper"><button type="button" data-step="-1" data-t="depth">−</button><input type="number" id="depth" value="1" min="0" max="24" step="1"><button type="button" data-step="1" data-t="depth">+</button></div></div>
+    <p class="hint">Depth is whole cells only — 1 cell = 32px vertical, so every corner lands on an intersection.</p>
+    <div class="row"><label for="snap">Snap outline to</label>
+      <select id="snap"><option value="0">Off</option><option value="0.25" selected>¼ cell</option><option value="0.5">½ cell</option><option value="1">1 cell</option></select></div>
+    <div class="row"><label for="detail">Curve detail</label><input type="range" id="detail" min="0.15" max="3" step="0.05" value="0.7"></div>
+    <div class="row"><label for="grid">Show grid</label><input type="checkbox" id="grid" checked></div>
+  </fieldset>
+
+  <fieldset>
+    <legend><span class="sect">Light &amp; palette<s></s></span></legend>
+    <div class="row"><label for="bgstep">Background step</label>
+      <select id="bgstep"><option>1</option><option selected>2</option><option>3</option><option>4</option></select></div>
+    <p class="hint">Faces are offsets from it: top −1, left ±0, right +1.</p>
+    <div class="row"><label for="scale">Slate scale</label>
+      <select id="scale"><option value="light" selected>Light</option><option value="dark">Dark</option></select></div>
+    <div class="row"><label for="light">Light from</label>
+      <select id="light"><option value="tl" selected>Top left</option><option value="tr">Top right</option></select></div>
+    <div class="row"><label for="hi">Highlighted object</label><input type="checkbox" id="hi"></div>
+    <div class="row"><label for="accfill">Accent fill</label><input type="checkbox" id="accfill"></div>
+    <div class="row"><label for="size">Relative size</label>
+      <select id="size"><option value="small" selected>Small — Cloud/5</option><option value="large">Large — Cloud/3</option></select></div>
+  </fieldset>
+
+  <fieldset>
+    <legend><span class="sect">Ground &amp; surface<s></s></span></legend>
+    <div class="row"><label for="ring2">Inset ring on top face</label><input type="checkbox" id="ring2" checked></div>
+    <div class="row"><label for="shadow">Ground shadow — Slate/4</label><input type="checkbox" id="shadow"></div>
+    <div class="row"><label for="fade">Ground fade</label><input type="checkbox" id="fade"></div>
+    <div class="row"><label for="dash">Ground dashes 2/2 <span class="tbd">tbd</span></label><input type="checkbox" id="dash"></div>
+    <div class="row"><label for="face">Icon on face</label>
+      <select id="face"><option value="top" selected>Top</option><option value="left">Left</option><option value="right">Right</option></select></div>
+    <div class="row"><label for="iconscale">Icon size on face</label><input type="range" id="iconscale" min="0.2" max="0.95" step="0.01" value="0.6"></div>
+    <div class="row"><label for="keepcolor">Keep icon's own colors</label><input type="checkbox" id="keepcolor"></div>
+  </fieldset>
+</aside>
+
+<section>
+  <div class="canvas">
+    <div class="cbar">
+      <span class="k">cell <b>56 × 32</b></span>
+      <span class="k">angle <b>29.7449°</b></span>
+      <span class="k">top face <b id="tf">168 × 96</b></span>
+      <span class="k">vertices <b id="vc">—</b></span>
+      <span class="push"></span>
+      <button class="btn ghost" type="button" id="copysvg">Copy SVG</button>
+    </div>
+    <div class="view" id="view"></div>
+    <div class="notes" id="notes"></div>
+  </div>
+
+  <div class="out">
+    <div class="cbar"><span class="k">Output — paste into Figma, layers named by role</span><span class="push"></span><span class="k" id="bytes"></span></div>
+    <pre id="code"></pre>
+  </div>
+</section>
+</main>
+</div>
+
+<script>
+"use strict";
+/* ---------- tokens ---------- */
+const SLATE={
+  light:["","#fcfcfd","#f9f9fb","#f0f0f3","#e8e8ec","#e0e1e6","#d9d9e0","#cdced6","#b9bbc6","#8b8d98","#80838d","#60646c","#1c2024"],
+  dark: ["","#111113","#18191b","#212225","#272a2d","#2e3135","#363a3f","#43484e","#5a6165","#696e77","#777b84","#b0b4ba","#edeef0"]
+};
+const CLOUD={3:"#C7E1FF",5:"#0070FE",6:"#0057FF"};
+/* one 1:1 isometric cell: bounding box 56 x 32, so edge vectors are 7:4 x4 */
+const AX={x:28,y:16}, BX={x:-28,y:16}, VZ=32;
+
+const PRESETS={
+  cloud:{vb:"0 0 84 64",body:'<path d="M20 52 Q6 52 6 40 Q6 28 20 28 Q22 12 40 12 Q58 12 62 28 Q78 28 78 40 Q78 52 64 52 Z" fill="#000"/>'},
+  ring:{vb:"0 0 64 64",body:'<path d="M32 4 A28 28 0 1 1 31.9 4 Z M32 20 A12 12 0 1 0 32.1 20 Z" fill="#000" fill-rule="evenodd"/>'},
+  chip:{vb:"0 0 64 64",body:'<path d="M10 10 H54 V54 H10 Z M22 22 H42 V42 H22 Z" fill="#000" fill-rule="evenodd"/>'}
+};
+
+const $=id=>document.getElementById(id);
+const state={mode:"tile"};
+
+/* ---------- sampling: SVG -> rings of points ---------- */
+function ringsFromSVG(src,tol){
+  const stage=$("stage"); stage.innerHTML="";
+  let doc;
+  try{ doc=new DOMParser().parseFromString(src,"image/svg+xml"); }catch(e){ return {rings:[],err:"Could not parse that SVG."}; }
+  const root=doc.querySelector("svg");
+  if(!root||doc.querySelector("parsererror")) return {rings:[],err:"That doesn't look like an SVG."};
+  stage.appendChild(document.importNode(root,true));
+  const svg=stage.querySelector("svg");
+  svg.setAttribute("width","1000"); svg.setAttribute("height","1000");
+  const geo=[...svg.querySelectorAll("path,rect,circle,ellipse,polygon,polyline,line")];
+  if(!geo.length) return {rings:[],err:"No drawable shapes found in that SVG."};
+  let strokeOnly=0, filled=0;
+  const rings=[];
+  for(const el of geo){
+    const cs=getComputedStyle(el);
+    const f=(el.getAttribute("fill")||cs.fill||"").trim();
+    const st=(el.getAttribute("stroke")||cs.stroke||"").trim();
+    if((f==="none"||f==="")&&st&&st!=="none") strokeOnly++; else filled++;
+    let total=0; try{ total=el.getTotalLength(); }catch(e){ continue; }
+    if(!total||!isFinite(total)) continue;
+    const step=Math.max(total/2400,0.4);
+    const m=el.getCTM?el.getCTM():null;
+    let cur=[],prev=null;
+    for(let d=0;d<=total;d+=step){
+      let p; try{ p=el.getPointAtLength(d); }catch(e){ break; }
+      const raw={x:p.x,y:p.y};
+      let x=p.x,y=p.y;
+      if(m){ const nx=m.a*x+m.c*y+m.e, ny=m.b*x+m.d*y+m.f; x=nx; y=ny; }
+      /* jump detection happens in the element's own units, before the CTM scales them */
+      if(prev&&Math.hypot(raw.x-prev.x,raw.y-prev.y)>step*6){ if(cur.length>2)rings.push(cur); cur=[]; }
+      cur.push({x,y}); prev=raw;
+    }
+    if(cur.length>2) rings.push(cur);
+  }
+  stage.innerHTML="";
+  if(!rings.length) return {rings:[],err:"Couldn't trace any outline in that SVG."};
+  /* normalise to a 0–100 box so the detail tolerance means the same thing for any icon */
+  const b=bbox(rings), k=100/Math.max(b.w,b.h||1);
+  const norm=rings.map(r=>r.map(p=>({x:(p.x-b.x0)*k,y:(p.y-b.y0)*k})));
+  const clean=norm.map(r=>rdp(dedupe(r),tol)).filter(r=>r.length>2);
+  return {rings:clean,strokeOnly,filled};
+}
+function dedupe(r){const o=[r[0]];for(let i=1;i<r.length;i++){const p=r[i],q=o[o.length-1];if(Math.hypot(p.x-q.x,p.y-q.y)>1e-4)o.push(p);}
+  if(o.length>2&&Math.hypot(o[0].x-o[o.length-1].x,o[0].y-o[o.length-1].y)<1e-4)o.pop();return o;}
+function rdp(pts,tol){
+  if(pts.length<4||tol<=0) return pts;
+  const keep=new Uint8Array(pts.length); keep[0]=1; keep[pts.length-1]=1;
+  (function rec(a,b){
+    let best=-1,bd=0;
+    const p=pts[a],q=pts[b],dx=q.x-p.x,dy=q.y-p.y,L=Math.hypot(dx,dy)||1;
+    for(let i=a+1;i<b;i++){
+      const d=Math.abs((pts[i].x-p.x)*dy-(pts[i].y-p.y)*dx)/L;
+      if(d>bd){bd=d;best=i;}
+    }
+    if(bd>tol&&best>0){keep[best]=1;rec(a,best);rec(best,b);}
+  })(0,pts.length-1);
+  return pts.filter((_,i)=>keep[i]);
+}
+function area(r){let a=0;for(let i=0;i<r.length;i++){const p=r[i],q=r[(i+1)%r.length];a+=p.x*q.y-q.x*p.y;}return a/2;}
+function inside(pt,r){let c=false;for(let i=0,j=r.length-1;i<r.length;j=i++){const a=r[i],b=r[j];
+  if(((a.y>pt.y)!==(b.y>pt.y))&&(pt.x<(b.x-a.x)*(pt.y-a.y)/(b.y-a.y)+a.x))c=!c;}return c;}
+
+/* ---------- geometry helpers ---------- */
+function bbox(rings){let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(const r of rings)for(const p of r){
+  if(p.x<x0)x0=p.x;if(p.y<y0)y0=p.y;if(p.x>x1)x1=p.x;if(p.y>y1)y1=p.y;}return{x0,y0,x1,y1,w:x1-x0,h:y1-y0};}
+function project(u,v){return{x:u*AX.x+v*BX.x, y:u*AX.y+v*BX.y};}
+function snapPt(p,g){ if(!g) return {x:Math.round(p.x),y:Math.round(p.y)};
+  let u=(p.x/AX.x+p.y/AX.y)/2, v=(p.y/AX.y-p.x/AX.x)/2;
+  u=Math.round(u/g)*g; v=Math.round(v/g)*g;
+  const q=project(u,v); return {x:Math.round(q.x),y:Math.round(q.y)};}
+const f2=n=>(Math.round(n*100)/100).toString();
+function polyD(r){return "M"+r.map(p=>f2(p.x)+" "+f2(p.y)).join(" L")+" Z";}
+
+/* inward offset of a convex polygon by t, then per-vertex rounding */
+function offsetConvex(r,t){
+  const sgn=area(r)>0?1:-1, out=[];
+  const lines=r.map((p,i)=>{
+    const q=r[(i+1)%r.length], dx=q.x-p.x, dy=q.y-p.y, L=Math.hypot(dx,dy)||1;
+    const nx=(dy/L)*sgn, ny=(-dx/L)*sgn;          // outward normal
+    return {p:{x:p.x-nx*t,y:p.y-ny*t}, d:{x:dx/L,y:dy/L}};
+  });
+  for(let i=0;i<lines.length;i++){
+    const a=lines[(i-1+lines.length)%lines.length], b=lines[i];
+    const den=a.d.x*b.d.y-a.d.y*b.d.x;
+    if(Math.abs(den)<1e-9){out.push(b.p);continue;}
+    const t2=((b.p.x-a.p.x)*b.d.y-(b.p.y-a.p.y)*b.d.x)/den;
+    out.push({x:a.p.x+a.d.x*t2, y:a.p.y+a.d.y*t2});
+  }
+  return out;
+}
+function roundedD(r,radii){
+  let d="";
+  for(let i=0;i<r.length;i++){
+    const V=r[i], P=r[(i-1+r.length)%r.length], N=r[(i+1)%r.length];
+    let d1={x:P.x-V.x,y:P.y-V.y}, d2={x:N.x-V.x,y:N.y-V.y};
+    const l1=Math.hypot(d1.x,d1.y)||1, l2=Math.hypot(d2.x,d2.y)||1;
+    d1={x:d1.x/l1,y:d1.y/l1}; d2={x:d2.x/l2,y:d2.y/l2};
+    const dot=Math.max(-1,Math.min(1,d1.x*d2.x+d1.y*d2.y));
+    const th=Math.acos(dot);
+    let rr=radii[i]||0, t=rr/Math.tan(th/2);
+    const cap=Math.min(l1,l2)/2;
+    if(t>cap){t=cap; rr=t*Math.tan(th/2);}
+    const T1={x:V.x+d1.x*t,y:V.y+d1.y*t}, T2={x:V.x+d2.x*t,y:V.y+d2.y*t};
+    const cross=d1.x*d2.y-d1.y*d2.x, sweep=cross<0?1:0;
+    d+= (i===0? "M"+f2(T1.x)+" "+f2(T1.y) : "L"+f2(T1.x)+" "+f2(T1.y));
+    if(rr>0.2) d+="A"+f2(rr)+" "+f2(rr)+" 0 0 "+sweep+" "+f2(T2.x)+" "+f2(T2.y);
+    else d+="L"+f2(T2.x)+" "+f2(T2.y);
+  }
+  return d+"Z";
+}
+
+/* ---------- the build ---------- */
+function build(){
+  const mode=state.mode;
+  const cw=+$("cw").value, ch=+$("ch").value, depth=+$("depth").value;
+  const snap=+$("snap").value, tol=+$("detail").value;
+  const sc=SLATE[$("scale").value], bgs=+$("bgstep").value;
+  const tok=n=>sc[Math.max(1,Math.min(12,n))];
+  const BG=tok(bgs), TOP=tok(bgs-1), NEAR=tok(bgs), FAR=tok(bgs+1);
+  const STROKE=tok(7), OUT9=tok(9), INSET=tok(5), SHAD=tok(4), FADE=tok(8);
+  const flip=$("light").value==="tr";
+  const hi=$("hi").checked, accFill=$("accfill").checked;
+  const accent=$("size").value==="small"?CLOUD[5]:CLOUD[3];
+  const outline=hi?OUT9:STROKE;
+
+  let rings, note=[], err=null, strokeOnly=0;
+  const src=currentSVG();
+
+  if(mode==="extrude"){
+    const s=ringsFromSVG(src,tol);
+    if(s.err){err=s.err;rings=[];} else {rings=s.rings;strokeOnly=s.strokeOnly;}
+  }else{
+    rings=[[{x:0,y:0},{x:cw,y:0},{x:cw,y:ch},{x:0,y:ch}]];
+  }
+  if(!rings.length) return {err:err||"Nothing to draw.",svg:""};
+
+  /* normalise into cell units, cw cells across the widest axis */
+  if(mode==="extrude"){
+    const b=bbox(rings), k=cw/Math.max(b.w,b.h||1);
+    rings=rings.map(r=>r.map(p=>({x:(p.x-b.x0)*k,y:(p.y-b.y0)*k})));
+  }
+
+  /* holes by containment parity, then winding: outer +, hole − */
+  const meta=rings.map((r,i)=>{
+    let depthIn=0;
+    rings.forEach((o,j)=>{ if(i!==j&&inside(r[0],o)) depthIn++; });
+    return {hole:depthIn%2===1};
+  });
+  let prj=rings.map((r,i)=>{
+    let q=r.map(p=>snapPt(project(p.x,p.y),snap));
+    q=dedupe(q);
+    const want=meta[i].hole?-1:1;
+    if(Math.sign(area(q))!==want) q.reverse();
+    return q;
+  }).filter(r=>r.length>2);
+  if(flip) prj=prj.map(r=>r.map(p=>({x:-p.x,y:p.y})).reverse());
+
+  const D=depth*VZ;
+  /* walls: contiguous runs of edges whose extruded quad faces the viewer */
+  const wallsNear=[], wallsFar=[];
+  for(const r of prj){
+    const n=r.length, seg=[];
+    for(let i=0;i<n;i++){
+      const p=r[i], q=r[(i+1)%n], dx=q.x-p.x, dy=q.y-p.y;
+      const vis=dx<0;                       // outward normal points down-screen
+      const side=vis?(dy<0?"near":"far"):null;   // along +A → near/lit, along B → far
+      seg.push({p,q,side});
+    }
+    let i=0, guard=0;
+    while(i<n&&!seg[i].side&&guard++<n) i++;
+    if(i>=n){ if(D>0){ const all=r.map(p=>p); wallsFar.push(all.concat(all.slice().reverse().map(p=>({x:p.x,y:p.y+D})))); } continue; }
+    const start=i; let runs=[],cur=null;
+    for(let k2=0;k2<n;k2++){
+      const s=seg[(start+k2)%n];
+      if(!s.side){ if(cur){runs.push(cur);cur=null;} continue; }
+      if(!cur||cur.side!==s.side){ if(cur)runs.push(cur); cur={side:s.side,pts:[s.p,s.q]}; }
+      else cur.pts.push(s.q);
+    }
+    if(cur)runs.push(cur);
+    if(D>0) for(const run of runs){
+      const top=run.pts, bot=top.slice().reverse().map(p=>({x:p.x,y:p.y+D}));
+      (run.side==="near"?wallsNear:wallsFar).push(top.concat(bot));
+    }
+  }
+
+  /* bounds + layers */
+  const topD=prj.map(polyD).join(" ");
+  const botD=prj.map(r=>polyD(r.map(p=>({x:p.x,y:p.y+D})))).join(" ");
+  const all=[]; prj.forEach(r=>r.forEach(p=>{all.push(p);all.push({x:p.x,y:p.y+D})}));
+  const bb=bbox([all]);
+  const pad=56, vb=[bb.x0-pad,bb.y0-pad,bb.w+pad*2,bb.h+pad*2].map(n=>Math.round(n));
+
+  const L=[]; const g=(id,inner)=>inner?`<g id="${id}">${inner}</g>`:"";
+  /* background */
+  L.push(`<rect id="Background" x="${vb[0]}" y="${vb[1]}" width="${vb[2]}" height="${vb[3]}" fill="${BG}"/>`);
+
+  /* grid */
+  if($("grid").checked){
+    let gl="";
+    const R=Math.min(120,Math.ceil((vb[2]+vb[3])/28)+6);
+    for(let i=-R;i<=R;i++){
+      const o1=project(i,-R), o2=project(i,R), o3=project(-R,i), o4=project(R,i);
+      gl+=`<path d="M${o1.x} ${o1.y}L${o2.x} ${o2.y}"/><path d="M${o3.x} ${o3.y}L${o4.x} ${o4.y}"/>`;
+    }
+    L.push(`<defs><clipPath id="frame"><rect x="${vb[0]}" y="${vb[1]}" width="${vb[2]}" height="${vb[3]}"/></clipPath></defs>`);
+    L.push(`<g id="Grid" clip-path="url(#frame)" stroke="${tok(bgs+1)}" stroke-width="1" fill="none">${gl}</g>`);
+  }
+
+  /* ground plane: base edges extended one cell each way */
+  const baseRing=prj[0].map(p=>({x:p.x,y:p.y+D}));
+  if($("fade").checked||$("dash").checked){
+    let defs="",lines="",gi=0;
+    const hull=mode==="tile"?baseRing:offsetConvex(baseRing,0);
+    for(let i=0;i<hull.length;i++){
+      const p=hull[i],q=hull[(i+1)%hull.length];
+      const dx=q.x-p.x,dy=q.y-p.y,L2=Math.hypot(dx,dy)||1,ux=dx/L2,uy=dy/L2,ext=Math.hypot(AX.x,AX.y);
+      const a={x:p.x-ux*ext,y:p.y-uy*ext}, b={x:q.x+ux*ext,y:q.y+uy*ext};
+      const id="fade"+(gi++);
+      defs+=`<linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="${f2(a.x)}" y1="${f2(a.y)}" x2="${f2(b.x)}" y2="${f2(b.y)}"><stop offset="0" stop-color="${BG}"/><stop offset="0.05" stop-color="${FADE}"/><stop offset="0.95" stop-color="${FADE}"/><stop offset="1" stop-color="${BG}"/></linearGradient>`;
+      lines+=`<path d="M${f2(a.x)} ${f2(a.y)}L${f2(b.x)} ${f2(b.y)}" stroke="url(#${id})"${$("dash").checked?' stroke-dasharray="2 2"':""}/>`;
+    }
+    L.push(`<defs>${defs}</defs><g id="Ground fade" stroke-width="1" fill="none">${lines}</g>`);
+  }
+
+  /* shadow */
+  if($("shadow").checked){
+    const off=flip?{x:-AX.x,y:AX.y}:AX;
+    L.push(`<path id="Ground shadow" d="${prj.map(r=>polyD(r.map(p=>({x:p.x+off.x,y:p.y+D+off.y})))).join(" ")}" fill="${SHAD}" fill-rule="evenodd"/>`);
+    note.push(["Shadow offset","1 cell — not specified in the doc"]);
+  }
+
+  /* silhouette pass: 2px behind everything, so only 1px shows outside */
+  const faceDs=wallsFar.concat(wallsNear).map(polyD).concat([topD]);
+  L.push(`<g id="Outline" fill="${outline}" stroke="${outline}" stroke-width="2" stroke-linejoin="round">${faceDs.map(d=>`<path d="${d}"/>`).join("")}</g>`);
+
+  /* faces */
+  const fillNear=accFill?accent:NEAR, fillFar=accFill?accent:FAR, fillTop=accFill?accent:TOP;
+  if(wallsFar.length) L.push(`<g id="Face away from light" fill="${fillFar}" stroke="${STROKE}" stroke-width="1" stroke-linejoin="round">${wallsFar.map(w=>`<path d="${polyD(w)}"/>`).join("")}</g>`);
+  if(wallsNear.length) L.push(`<g id="Face toward light" fill="${fillNear}" stroke="${STROKE}" stroke-width="1" stroke-linejoin="round">${wallsNear.map(w=>`<path d="${polyD(w)}"/>`).join("")}</g>`);
+  L.push(`<path id="Top face" d="${topD}" fill="${fillTop}" fill-rule="evenodd" stroke="${STROKE}" stroke-width="1" stroke-linejoin="round"/>`);
+
+  /* inset ring — spec'd for a rectangular top face only */
+  if($("ring2").checked&&mode==="tile"){
+    const r=prj[0], inset=offsetConvex(r,5);
+    const f=(cw*56)/168;
+    /* acute pair = the x-extremes, so they take the smaller radius */
+    const xs=inset.map(p=>p.x), xmin=Math.min(...xs), xmax=Math.max(...xs);
+    const rad=inset.map(p=>(Math.abs(p.x-xmin)<.5||Math.abs(p.x-xmax)<.5)?8*f:10*f);
+    L.push(`<path id="Top inset line" d="${roundedD(inset,rad)}" fill="none" stroke="${INSET}" stroke-width="1"/>`);
+    note.push(["Ring radii",`${f2(8*f)} acute / ${f2(10*f)} obtuse`]);
+  }
+
+  /* icon on a face */
+  if(mode==="tile"){
+    const body=iconBody(src,$("keepcolor").checked);
+    if(body.err) err=body.err;
+    else{
+      const face=$("face").value, k0=+$("iconscale").value;
+      const b=body.vb, span=Math.max(b.w,b.h)||1;
+      const cells=(face==="top"?Math.min(cw,ch):cw)*k0;
+      const k=cells/span;
+      let M, cx=b.x0+b.w/2, cy=b.y0+b.h/2;
+      if(face==="top"){
+        const c=project(cw/2,ch/2);
+        M=[AX.x*k,AX.y*k,BX.x*k,BX.y*k,c.x,c.y];
+      }else if(face==="left"){
+        const base=project(0,ch), c={x:base.x+AX.x*cw/2,y:base.y+AX.y*cw/2+D/2};
+        M=[AX.x*k,AX.y*k,0,VZ*k,c.x,c.y];
+      }else{
+        const c=project(cw,ch/2);
+        M=[-BX.x*k,-BX.y*k,0,VZ*k,c.x,c.y+D/2];
+      }
+      if(flip){ M[0]=-M[0]; M[2]=-M[2]; M[4]=-M[4]; }
+      const mv=`matrix(${M.map(f2).join(" ")}) translate(${f2(-cx)} ${f2(-cy)})`;
+      const ink=hi?CLOUD[6]:tok(9);
+      const paint=$("keepcolor").checked?"":(body.filled
+        ? ` fill="${accFill&&hi?accent:ink}" stroke="none"`
+        : ` fill="none" stroke="${ink}" stroke-linecap="square" stroke-linejoin="round"`);
+      L.push(`<g id="Surface graphic" transform="${mv}"${paint}>${body.inner}</g>`);
+    }
+  }
+
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb.join(" ")}" width="${vb[2]}" height="${vb[3]}">
+<desc>7:4 isometric — cell 56x32, angle 29.7449deg. Background Slate/${bgs}; top face Slate/${bgs-1}; face toward light Slate/${bgs}; face away Slate/${bgs+1}; strokes Slate/7; outline ${hi?"Slate/9 (highlighted)":"Slate/7"}. Depth ${depth} cell(s).</desc>
+${L.join("\n")}
+</svg>`;
+  const vcount=prj.reduce((n,r)=>n+r.length,0);
+  return {svg,err,note,vcount,strokeOnly,topW:cw*56,topH:ch*32};
+}
+
+function iconBody(src,keep){
+  try{
+    const doc=new DOMParser().parseFromString(src,"image/svg+xml");
+    const root=doc.querySelector("svg");
+    if(!root||doc.querySelector("parsererror")) return {err:"That doesn't look like an SVG."};
+    let vbAttr=root.getAttribute("viewBox");
+    let vb;
+    if(vbAttr){const n=vbAttr.trim().split(/[\s,]+/).map(Number); vb={x0:n[0],y0:n[1],w:n[2],h:n[3]};}
+    else vb={x0:0,y0:0,w:+root.getAttribute("width")||64,h:+root.getAttribute("height")||64};
+    /* is the icon drawn with fills or with strokes? decides which property we recolour */
+    let filled=false;
+    root.querySelectorAll("*").forEach(el=>{
+      const f=(el.getAttribute("fill")||"").trim();
+      if(f&&f!=="none") filled=true;
+    });
+    if(keep) return {vb,inner:root.innerHTML,filled};
+    /* strip only the colours — stroke-width and geometry are the icon's own, per the doc */
+    root.querySelectorAll("*").forEach(el=>{ el.removeAttribute("fill"); el.removeAttribute("stroke"); el.removeAttribute("style"); el.removeAttribute("class"); });
+    return {vb,inner:root.innerHTML,filled};
+  }catch(e){ return {err:"Could not read that SVG."}; }
+}
+function currentSVG(){
+  const p=$("preset").value;
+  if(p==="custom") return $("svgin").value.trim();
+  const pr=PRESETS[p];
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${pr.vb}">${pr.body}</svg>`;
+}
+
+/* ---------- render ---------- */
+let lastSVG="";
+function render(){
+  const r=build();
+  const view=$("view");
+  if(r.err&&!r.svg){ view.innerHTML=`<p class="warn">${r.err}</p>`; $("code").textContent=""; return; }
+  view.innerHTML=r.svg; lastSVG=r.svg;
+  $("code").textContent=r.svg;
+  $("bytes").textContent=(new TextEncoder().encode(r.svg).length/1024).toFixed(1)+" kB";
+  $("vc").textContent=r.vcount;
+  $("tf").textContent=r.topW+" × "+r.topH;
+  const notes=[["Projection","7 across / 4 down · 29.7449°"],
+    ["Depth",$("depth").value+" × 32px, whole cells"],
+    ["Snap",$("snap").value==="0"?"integer px":$("snap").options[$("snap").selectedIndex].text+" intersections"],
+    ...(r.note||[])];
+  if(state.mode==="extrude"&&r.strokeOnly) notes.push(["Heads up",`${r.strokeOnly} stroke-only path(s) — a centreline extrudes as a ribbon, not a volume. Use “Icon on tile”.`]);
+  if(r.err) notes.push(["Note",r.err]);
+  $("notes").innerHTML=notes.map(([k,v])=>`<p><code>${k}</code><span>${v}</span></p>`).join("");
+}
+
+/* ---------- wiring ---------- */
+$("modehint").textContent="A tile built on the grid with the icon skewed onto a face — the doc's rule: icons keep their own geometry.";
+document.querySelectorAll("#mode button").forEach(b=>b.addEventListener("click",()=>{
+  state.mode=b.dataset.m;
+  document.querySelectorAll("#mode button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));
+  $("modehint").textContent=state.mode==="tile"
+    ? "A tile built on the grid with the icon skewed onto a face — the doc's rule: icons keep their own geometry."
+    : "The icon's own silhouette becomes the footprint. Works on solid, filled shapes; stroke-only icons won't read as volume.";
+  render();
+}));
+document.querySelectorAll(".stepper button").forEach(b=>b.addEventListener("click",()=>{
+  const f=$(b.dataset.t); f.value=Math.max(+f.min,Math.min(+f.max,+f.value+ +b.dataset.step)); render();
+}));
+["cw","ch","depth","snap","detail","grid","bgstep","scale","light","hi","accfill","size","ring2","shadow","fade","dash","face","iconscale","keepcolor","preset"]
+  .forEach(id=>$(id).addEventListener("input",render));
+$("svgin").addEventListener("input",()=>{ if($("svgin").value.trim()){$("preset").value="custom";} render(); });
+$("svgfile").addEventListener("change",async e=>{
+  const f=e.target.files[0]; if(!f)return;
+  $("svgin").value=await f.text(); $("preset").value="custom"; render();
+});
+$("copysvg").addEventListener("click",async()=>{
+  try{ await navigator.clipboard.writeText(lastSVG); $("copysvg").textContent="Copied"; }
+  catch(e){ const t=$("code"); const r=document.createRange(); r.selectNodeContents(t);
+    const s=getSelection(); s.removeAllRanges(); s.addRange(r); $("copysvg").textContent="Selected — ⌘C"; }
+  setTimeout(()=>$("copysvg").textContent="Copy SVG",1600);
+});
+$("theme").addEventListener("click",()=>{
+  const cur=document.documentElement.getAttribute("data-theme");
+  const dark=cur?cur==="dark":matchMedia("(prefers-color-scheme:dark)").matches;
+  document.documentElement.setAttribute("data-theme",dark?"light":"dark");
+});
+render();
+</script>
+
+</body>
+</html>
