@@ -113,14 +113,16 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px}
   <fieldset>
     <legend><span class="sect">Source<s></s></span></legend>
     <div class="seg" role="group" id="mode">
-      <button type="button" data-m="tile" aria-pressed="true">Icon on tile</button>
-      <button type="button" data-m="extrude" aria-pressed="false">Extrude icon</button>
+      <button type="button" data-m="extrude" aria-pressed="true">Icon to 3D</button>
+      <button type="button" data-m="tile" aria-pressed="false">Icon on tile</button>
     </div>
     <p class="hint" id="modehint"></p>
-    <div class="row"><label for="preset">Preset</label>
+    <label for="svgfile" class="btn" style="text-align:center">Upload a 2D SVG icon</label>
+    <input class="file" type="file" id="svgfile" accept=".svg,image/svg+xml" aria-label="Upload a 2D SVG icon">
+    <div class="row"><label for="preset">Example icon</label>
       <select id="preset"><option value="cloud">Cloud</option><option value="ring">Ring (hole)</option><option value="chip">Chip</option><option value="custom">Pasted SVG</option></select></div>
-    <textarea id="svgin" spellcheck="false" placeholder="Paste an icon's SVG here…"></textarea>
-    <input class="file" type="file" id="svgfile" accept=".svg,image/svg+xml">
+    <textarea id="svgin" aria-label="SVG source" spellcheck="false" placeholder="Or paste your SVG code here…"></textarea>
+    <p class="hint">Use an SVG with filled shapes. In Figma, outline strokes before exporting stroke-based icons.</p>
   </fieldset>
 
   <fieldset>
@@ -206,7 +208,7 @@ const PRESETS={
 };
 
 const $=id=>document.getElementById(id);
-const state={mode:"tile"};
+const state={mode:"extrude"};
 
 /* ---------- sampling: SVG -> rings of points ---------- */
 function ringsFromSVG(src,tol){
@@ -363,7 +365,8 @@ function build(){
     const want=meta[i].hole?-1:1;
     if(Math.sign(area(q))!==want) q.reverse();
     return q;
-  }).filter(r=>r.length>2);
+  }).filter(r=>r.length>2&&Math.abs(area(r))>0.01);
+  if(!prj.length) return {err:"The outline is too small for this snap setting. Increase the footprint or turn snapping off.",svg:""};
   if(flip) prj=prj.map(r=>r.map(p=>({x:-p.x,y:p.y})).reverse());
 
   const D=depth*VZ;
@@ -496,7 +499,8 @@ function build(){
 ${L.join("\n")}
 </svg>`;
   const vcount=prj.reduce((n,r)=>n+r.length,0);
-  return {svg,err,note,vcount,strokeOnly,topW:cw*56,topH:ch*32};
+  const topBounds=bbox(prj);
+  return {svg,err,note,vcount,strokeOnly,topW:Math.round(topBounds.w),topH:Math.round(topBounds.h)};
 }
 
 function iconBody(src,keep){
@@ -530,9 +534,16 @@ function currentSVG(){
 /* ---------- render ---------- */
 let lastSVG="";
 function render(){
+  const extrude=state.mode==="extrude";
+  $("ch").closest(".row").hidden=extrude;
+  for(const id of ["ring2","face","iconscale","keepcolor"]) $(id).closest(".row").hidden=extrude;
+  $("modehint").textContent=extrude
+    ? "Your icon's silhouette becomes the 3D object, with 7:4 projection, extrusion and Slate face shading. Upload an SVG to replace the example."
+    : "Place a flat icon on the face of a rectangular tile.";
   const r=build();
   const view=$("view");
-  if(r.err&&!r.svg){ view.innerHTML=`<p class="warn">${r.err}</p>`; $("code").textContent=""; return; }
+  if(r.err&&!r.svg){ view.innerHTML=`<p class="warn">${r.err}</p>`; $("code").textContent=""; lastSVG=""; $("bytes").textContent=""; $("vc").textContent="—"; $("tf").textContent="—"; $("notes").textContent=""; $("copysvg").disabled=true; return; }
+  $("copysvg").disabled=false;
   view.innerHTML=r.svg; lastSVG=r.svg;
   $("code").textContent=r.svg;
   $("bytes").textContent=(new TextEncoder().encode(r.svg).length/1024).toFixed(1)+" kB";
@@ -542,7 +553,7 @@ function render(){
     ["Depth",$("depth").value+" × 32px, whole cells"],
     ["Snap",$("snap").value==="0"?"integer px":$("snap").options[$("snap").selectedIndex].text+" intersections"],
     ...(r.note||[])];
-  if(state.mode==="extrude"&&r.strokeOnly) notes.push(["Heads up",`${r.strokeOnly} stroke-only path(s) — a centreline extrudes as a ribbon, not a volume. Use “Icon on tile”.`]);
+  if(state.mode==="extrude"&&r.strokeOnly) notes.push(["Outline strokes",`${r.strokeOnly} stroke-only path(s). Outline strokes in your design tool and upload again to give the icon solid thickness.`]);
   if(r.err) notes.push(["Note",r.err]);
   $("notes").innerHTML=notes.map(([k,v])=>`<p><code>${k}</code><span>${v}</span></p>`).join("");
 }
