@@ -148,7 +148,7 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px}
     <div class="row"><label for="snap">Snap outline to</label>
       <select id="snap"><option value="0" selected>Off</option><option value="0.25">¼ cell</option><option value="0.5">½ cell</option><option value="1">1 cell</option></select></div>
     <div class="row"><label for="detail">Curve detail</label><input type="range" id="detail" min="0.15" max="3" step="0.05" value="0.7"></div>
-    <div class="row"><label for="grid">Show grid</label><input type="checkbox" id="grid" checked></div>
+    <div class="row"><label for="grid">Show grid</label><a href="https://www.figma.com/design/zdBO8o3q9NIsaJMnwymFh8/?node-id=386-88855" target="_blank" rel="noopener" style="font-size:11px;color:var(--muted)">Your Figma grid ↗</a><input type="checkbox" id="grid" checked></div>
   </fieldset>
 
   <fieldset>
@@ -187,7 +187,7 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px}
       <span class="k">top face <b id="tf">168 × 96</b></span>
       <span class="k">vertices <b id="vc">—</b></span>
       <span class="push"></span>
-      <label class="grid-toggle"><input type="checkbox" id="previewgrid" checked>Show grid</label>
+      <label class="grid-toggle"><input type="checkbox" id="previewgrid" checked>Show grid</label><a href="https://www.figma.com/design/zdBO8o3q9NIsaJMnwymFh8/?node-id=386-88855" target="_blank" rel="noopener" style="font-size:11px;color:var(--muted)">Your Figma grid ↗</a>
       <button class="btn ghost" type="button" id="expandpreview" aria-expanded="false">Expand preview</button>
       <button class="btn ghost" type="button" id="copysvg">Copy SVG</button>
     </div>
@@ -527,16 +527,10 @@ function build(){
   /* background */
   L.push(`<rect id="Background" x="${vb[0]}" y="${vb[1]}" width="${vb[2]}" height="${vb[3]}" fill="${BG}"/>`);
 
-  /* grid */
+  /* Original Figma vector grid, node 386:88855. Repeat a native 56×32 cell.
+     The crop aligns its major-line intersection to the projection origin. */
   if($("grid").checked){
-    let gl="";
-    const R=Math.min(120,Math.ceil((vb[2]+vb[3])/28)+6);
-    for(let i=-R;i<=R;i++){
-      const o1=project(i,-R), o2=project(i,R), o3=project(-R,i), o4=project(R,i);
-      gl+=`<path d="M${o1.x} ${o1.y}L${o2.x} ${o2.y}"/><path d="M${o3.x} ${o3.y}L${o4.x} ${o4.y}"/>`;
-    }
-    L.push(`<defs><clipPath id="frame"><rect x="${vb[0]}" y="${vb[1]}" width="${vb[2]}" height="${vb[3]}"/></clipPath></defs>`);
-    L.push(`<g id="Grid" clip-path="url(#frame)" stroke="${tok(bgs+1)}" stroke-width="1" fill="none">${gl}</g>`);
+    L.push(`<g id="Grid"><defs><pattern id="figma-grid" patternUnits="userSpaceOnUse" width="56" height="32"><g fill="none" transform="translate(-56 -60)"><path d="M91 64L42 36" stroke="#B0B0B0" stroke-width="0.1"/><path d="M91 72L42 44" stroke="#B0B0B0" stroke-width="0.1"/><path d="M91 80L42 52" stroke="#B0B0B0" stroke-width="0.1"/><path d="M91 88L42 60" stroke="#B0B0B0" stroke-width="0.1"/><path d="M91 96L42 68" stroke="#B0B0B0" stroke-width="0.1"/><path d="M91 104L42 76" stroke="#B0B0B0" stroke-width="0.1"/><path d="M91 112L42 84" stroke="#B0B0B0" stroke-width="0.1"/><path d="M42 92L91 64" stroke="#B0B0B0" stroke-width="0.1"/><path d="M42 100L91 72" stroke="#B0B0B0" stroke-width="0.1"/><path d="M42 108L91 80" stroke="#B0B0B0" stroke-width="0.1"/><path d="M42 116L91 88" stroke="#B0B0B0" stroke-width="0.1"/><path d="M42 84L91 56" stroke="#B0B0B0" stroke-width="0.1"/><path d="M42 76L91 48" stroke="#B0B0B0" stroke-width="0.1"/><path d="M42 68L91 40" stroke="#B0B0B0" stroke-width="0.1"/><path d="M42 116L91 88" stroke="#B0B0B0" stroke-width="0.1"/><path d="M133 72L84 44" stroke="#B0B0B0" stroke-width="0.1"/><path d="M133 80L84 52" stroke="#B0B0B0" stroke-width="0.1"/><path d="M133 88L84 60" stroke="#B0B0B0" stroke-width="0.1"/><path d="M133 96L84 68" stroke="#B0B0B0" stroke-width="0.1"/><path d="M133 104L84 76" stroke="#B0B0B0" stroke-width="0.1"/><path d="M133 112L84 84" stroke="#B0B0B0" stroke-width="0.1"/><path d="M84 92L133 64" stroke="#B0B0B0" stroke-width="0.1"/><path d="M84 100L133 72" stroke="#B0B0B0" stroke-width="0.1"/><path d="M84 108L133 80" stroke="#B0B0B0" stroke-width="0.1"/><path d="M84 84L133 56" stroke="#B0B0B0" stroke-width="0.1"/><path d="M84 76L133 48" stroke="#B0B0B0" stroke-width="0.1"/><path d="M84 68L133 40" stroke="#B0B0B0" stroke-width="0.1"/><path d="M84 60L133 32" stroke="#B0B0B0" stroke-width="0.1"/><path d="M133 120L84 92" stroke="#B0B0B0" stroke-width="0.1"/><path d="M98 68L0 12" stroke="#FF5353" stroke-width="0.2"/><path d="M98 84L0 28" stroke="#FF5353" stroke-width="0.2"/><path d="M98 100L0 44" stroke="#FF5353" stroke-width="0.2"/><path d="M98 116L0 60" stroke="#FF5353" stroke-width="0.2"/><path d="M0 124L98 68" stroke="#FF5353" stroke-width="0.2"/><path d="M0 140L98 84" stroke="#FF5353" stroke-width="0.2"/><path d="M0 108L98 52" stroke="#FF5353" stroke-width="0.2"/><path d="M0 92L98 36" stroke="#FF5353" stroke-width="0.2"/><path d="M182 100L84 44" stroke="#FF5353" stroke-width="0.2"/><path d="M182 116L84 60" stroke="#FF5353" stroke-width="0.2"/><path d="M182 132L84 76" stroke="#FF5353" stroke-width="0.2"/><path d="M182 148L84 92" stroke="#FF5353" stroke-width="0.2"/><path d="M84 108L182 52" stroke="#FF5353" stroke-width="0.2"/><path d="M84 92L182 36" stroke="#FF5353" stroke-width="0.2"/><path d="M84 76L182 20" stroke="#FF5353" stroke-width="0.2"/><path d="M84 60L182 4" stroke="#FF5353" stroke-width="0.2"/><path d="M196 108L0 -4" stroke="#898989" stroke-width="0.4"/><path d="M196 140L0 28" stroke="#898989" stroke-width="0.4"/><path d="M196 172L0 60" stroke="#898989" stroke-width="0.4"/><path d="M0 156L196 44" stroke="#898989" stroke-width="0.4"/><path d="M0 124L196 12" stroke="#898989" stroke-width="0.4"/><path d="M0 92L196 -20" stroke="#898989" stroke-width="0.4"/></g></pattern></defs><rect x="${vb[0]}" y="${vb[1]}" width="${vb[2]}" height="${vb[3]}" fill="url(#figma-grid)"/></g>`);
   }
 
   /* ground plane: base edges extended one cell each way */
