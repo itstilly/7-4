@@ -145,9 +145,6 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px}
     <div class="row"><label for="depth">Extrusion, cells</label>
       <div class="stepper"><button type="button" data-step="-1" data-t="depth">−</button><input type="number" id="depth" value="1" min="0" max="24" step="1"><button type="button" data-step="1" data-t="depth">+</button></div></div>
     <p class="hint">Depth is whole cells only — 1 cell = 32px vertical, so every corner lands on an intersection.</p>
-    <div class="row"><label for="snap">Snap outline to</label>
-      <select id="snap"><option value="0" selected>Off</option><option value="0.25">¼ cell</option><option value="0.5">½ cell</option><option value="1">1 cell</option></select></div>
-    <div class="row"><label for="detail">Curve detail</label><input type="range" id="detail" min="0.15" max="3" step="0.05" value="0.7"></div>
     <div class="row"><label for="grid">Show grid</label><a href="https://www.figma.com/design/zdBO8o3q9NIsaJMnwymFh8/?node-id=386-88855" target="_blank" rel="noopener" style="font-size:11px;color:var(--muted)">Your Figma grid ↗</a><input type="checkbox" id="grid" checked></div>
   </fieldset>
 
@@ -265,7 +262,7 @@ function straightPathPoints(el){
   return out;
 }
 
-function ringsFromSVG(src,tol){
+function ringsFromSVG(src){
   const stage=$("stage"); stage.innerHTML="";
   let doc;
   try{ doc=new DOMParser().parseFromString(src,"image/svg+xml"); }catch(e){ return {rings:[],err:"Could not parse that SVG."}; }
@@ -305,29 +302,15 @@ function ringsFromSVG(src,tol){
   const origin={x:svg.viewBox.baseVal.x,y:svg.viewBox.baseVal.y};
   stage.innerHTML="";
   if(!rings.length) return {rings:[],err:"Couldn't trace any outline in that SVG."};
-  /* normalise to a 0–100 box so the detail tolerance means the same thing for any icon */
+  /* Keep all traced outline points; normalize only for Fit footprint sizing. */
   const b=bbox(rings), k=100/Math.max(b.w,b.h||1);
   const norm=rings.map(r=>r.map(p=>({x:(p.x-b.x0)*k,y:(p.y-b.y0)*k})));
-  const clean=norm.map(r=>rdp(dedupe(r),tol)).filter(r=>r.length>2);
-  const sourceRings=rings.map(r=>rdp(dedupe(r),tol/k)).filter(r=>r.length>2);
+  const clean=norm.map(r=>dedupe(r)).filter(r=>r.length>2);
+  const sourceRings=rings.map(r=>dedupe(r)).filter(r=>r.length>2);
   return {rings:clean,sourceRings,origin,strokeOnly,filled};
 }
 function dedupe(r){const o=[r[0]];for(let i=1;i<r.length;i++){const p=r[i],q=o[o.length-1];if(Math.hypot(p.x-q.x,p.y-q.y)>1e-4)o.push(p);}
   if(o.length>2&&Math.hypot(o[0].x-o[o.length-1].x,o[0].y-o[o.length-1].y)<1e-4)o.pop();return o;}
-function rdp(pts,tol){
-  if(pts.length<4||tol<=0) return pts;
-  const keep=new Uint8Array(pts.length); keep[0]=1; keep[pts.length-1]=1;
-  (function rec(a,b){
-    let best=-1,bd=0;
-    const p=pts[a],q=pts[b],dx=q.x-p.x,dy=q.y-p.y,L=Math.hypot(dx,dy)||1;
-    for(let i=a+1;i<b;i++){
-      const d=Math.abs((pts[i].x-p.x)*dy-(pts[i].y-p.y)*dx)/L;
-      if(d>bd){bd=d;best=i;}
-    }
-    if(bd>tol&&best>0){keep[best]=1;rec(a,best);rec(best,b);}
-  })(0,pts.length-1);
-  return pts.filter((_,i)=>keep[i]);
-}
 function area(r){let a=0;for(let i=0;i<r.length;i++){const p=r[i],q=r[(i+1)%r.length];a+=p.x*q.y-q.x*p.y;}return a/2;}
 function inside(pt,r){let c=false;for(let i=0,j=r.length-1;i<r.length;j=i++){const a=r[i],b=r[j];
   if(((a.y>pt.y)!==(b.y>pt.y))&&(pt.x<(b.x-a.x)*(pt.y-a.y)/(b.y-a.y)+a.x))c=!c;}return c;}
@@ -336,10 +319,6 @@ function inside(pt,r){let c=false;for(let i=0,j=r.length-1;i<r.length;j=i++){con
 function bbox(rings){let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(const r of rings)for(const p of r){
   if(p.x<x0)x0=p.x;if(p.y<y0)y0=p.y;if(p.x>x1)x1=p.x;if(p.y>y1)y1=p.y;}return{x0,y0,x1,y1,w:x1-x0,h:y1-y0};}
 function project(u,v){return{x:u*AX.x+v*BX.x, y:u*AX.y+v*BX.y};}
-function snapPt(p,g){ if(!g) return {x:p.x,y:p.y};
-  let u=(p.x/AX.x+p.y/AX.y)/2, v=(p.y/AX.y-p.x/AX.x)/2;
-  u=Math.round(u/g)*g; v=Math.round(v/g)*g;
-  const q=project(u,v); return {x:Math.round(q.x),y:Math.round(q.y)};}
 const f2=n=>(Math.round(n*100)/100).toString();
 function polyD(r){return "M"+r.map(p=>f2(p.x)+" "+f2(p.y)).join(" L")+" Z";}
 
@@ -417,7 +396,6 @@ function build(){
   const mode=state.mode;
   const sourceGrid=mode==="extrude"&&$("sizing").value==="source";
   const cw=+$("cw").value, ch=+$("ch").value, depth=+$("depth").value;
-  const snap=+$("snap").value, tol=+$("detail").value;
   const sc=SLATE[$("scale").value], bgs=+$("bgstep").value;
   const tok=n=>sc[Math.max(1,Math.min(12,n))];
   const BG=tok(bgs), TOP=tok(bgs-1), NEAR=tok(bgs), FAR=tok(bgs+1);
@@ -431,7 +409,7 @@ function build(){
   const src=currentSVG();
 
   if(mode==="extrude"){
-    const s=ringsFromSVG(src,tol);
+    const s=ringsFromSVG(src);
     if(s.err){err=s.err;rings=[];} else {
       rings=sourceGrid?s.sourceRings.map(r=>r.map(p=>({x:p.x-s.origin.x,y:p.y-s.origin.y}))):s.rings;
       strokeOnly=s.strokeOnly;
@@ -464,7 +442,7 @@ function build(){
       rings=rings.map(r=>r.map(p=>({x:p.x/unit,y:p.y/unit})));
       note.push(["Source grid",`${unit} px = 1 cell · frame origin preserved`]);
       const offGrid=rings.flat().filter(p=>Math.abs(p.x-Math.round(p.x))>1e-5||Math.abs(p.y-Math.round(p.y))>1e-5).length;
-      if(offGrid&&snap===0)note.push(["Off-grid points",`${offGrid} outline points are between whole-cell intersections. Align the source outline, or choose 1 cell snapping to move them.`]);
+      if(offGrid)note.push(["Off-grid points",`${offGrid} outline points are between whole-cell intersections. Adjust the original SVG if you want these points on the grid.`]);
     }else{
       const b=bbox(rings), k=cw/Math.max(b.w,b.h||1);
       rings=rings.map(r=>r.map(p=>({x:(p.x-b.x0)*k,y:(p.y-b.y0)*k})));
@@ -478,13 +456,13 @@ function build(){
     return {hole:depthIn%2===1};
   });
   let prj=rings.map((r,i)=>{
-    let q=r.map(p=>snapPt(project(p.x,p.y),snap));
+    let q=r.map(p=>project(p.x,p.y));
     q=dedupe(q);
     const want=meta[i].hole?-1:1;
     if(Math.sign(area(q))!==want) q.reverse();
     return q;
   }).filter(r=>r.length>2&&Math.abs(area(r))>0.01);
-  if(!prj.length) return {err:"The outline is too small for this snap setting. Increase the footprint or turn snapping off.",svg:""};
+  if(!prj.length) return {err:"The SVG has no usable filled outline at this size.",svg:""};
   if(flip) prj=prj.map(r=>r.map(p=>({x:-p.x,y:p.y})).reverse());
 
   const D=depth*VZ;
@@ -685,7 +663,6 @@ function render(){
   $("tf").textContent=r.topW+" × "+r.topH;
   const notes=[["Projection","7 across / 4 down · 29.7449°"],
     ["Depth",$("depth").value+" × 32px, whole cells"],
-    ["Snap",$("snap").value==="0"?"off · preserve outline":$("snap").options[$("snap").selectedIndex].text+" intersections"],
     ...(r.note||[])];
   if(state.mode==="extrude"&&r.strokeOnly) notes.push(["Outline strokes",`${r.strokeOnly} stroke-only path(s). Outline strokes in your design tool and upload again to give the icon solid thickness.`]);
   if(r.err) notes.push(["Note",r.err]);
@@ -713,7 +690,7 @@ document.querySelectorAll("#mode button").forEach(b=>b.addEventListener("click",
 document.querySelectorAll(".stepper button").forEach(b=>b.addEventListener("click",()=>{
   const f=$(b.dataset.t); f.value=Math.max(+f.min,Math.min(+f.max,+f.value+ +b.dataset.step)); render();
 }));
-["sizing","sourcecell","rotation","cw","ch","depth","snap","detail","grid","bgstep","scale","light","hi","accfill","size","ring2","shadow","fade","dash","face","iconscale","keepcolor","preset"]
+["sizing","sourcecell","rotation","cw","ch","depth","grid","bgstep","scale","light","hi","accfill","size","ring2","shadow","fade","dash","face","iconscale","keepcolor","preset"]
   .forEach(id=>$(id).addEventListener("input",render));
 $("svgin").addEventListener("input",()=>{ if($("svgin").value.trim()){$("preset").value="custom";} render(); });
 $("svgfile").addEventListener("change",async e=>{
