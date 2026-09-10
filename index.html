@@ -87,6 +87,11 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px}
 .btn.ghost:hover{color:var(--ink);border-color:var(--ink-3)}
 .view{padding:22px 12px;display:flex;align-items:center;justify-content:center;min-height:300px;overflow-x:auto}
 .view svg{max-width:100%;height:auto;display:block}
+.canvas.expanded{position:fixed;inset:16px;z-index:1000;display:flex;flex-direction:column;box-shadow:0 0 0 24px var(--bg)}
+.canvas.expanded .view{flex:1;min-height:0;overflow:hidden}
+.canvas.expanded .view svg{width:100%;height:100%;max-height:100%}
+.canvas.expanded .notes{display:none}
+.grid-toggle{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-2)}
 .notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0 26px;padding:12px 12px 14px;border-top:1px solid var(--line)}
 .notes p{margin:0;padding:5px 0;font-size:12px;color:var(--ink-3);display:flex;gap:8px;align-items:baseline}
 .notes p code{font-family:var(--mono);font-size:11px;color:var(--ink-2);white-space:nowrap}
@@ -127,8 +132,12 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px}
 
   <fieldset>
     <legend><span class="sect">Grid<s></s></span></legend>
+    <div class="row" id="sizingrow"><label for="sizing">Icon sizing</label>
+      <select id="sizing"><option value="source" selected>Source grid</option><option value="fit">Fit footprint</option></select></div>
+    <div class="row" id="sourcecellrow"><label for="sourcecell">Source px per cell</label><input type="number" id="sourcecell" value="8" min="1" max="1024" step="1"></div>
+    <p class="hint" id="sourcegridhint">Source pixels per isometric cell. Align points to your SVG frame's grid; its origin and spacing are preserved.</p>
     <div class="row" id="rotationrow"><label for="rotation">Icon orientation</label>
-      <select id="rotation"><option value="auto">Auto align</option><option value="0">Original</option><option value="45">45°</option><option value="90">90°</option><option value="135">135°</option><option value="180">180°</option><option value="225">225°</option><option value="270">270°</option><option value="315">315°</option></select></div>
+      <select id="rotation"><option value="auto">Auto align</option><option value="0" selected>Original</option><option value="45">45°</option><option value="90">90°</option><option value="135">135°</option><option value="180">180°</option><option value="225">225°</option><option value="270">270°</option><option value="315">315°</option></select></div>
     <div class="row"><label for="cw">Footprint, cells across</label>
       <div class="stepper"><button type="button" data-step="-1" data-t="cw">−</button><input type="number" id="cw" value="3" min="1" max="24" step="1"><button type="button" data-step="1" data-t="cw">+</button></div></div>
     <div class="row"><label for="ch">Footprint, cells deep</label>
@@ -178,6 +187,8 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px}
       <span class="k">top face <b id="tf">168 × 96</b></span>
       <span class="k">vertices <b id="vc">—</b></span>
       <span class="push"></span>
+      <label class="grid-toggle"><input type="checkbox" id="previewgrid" checked>Show grid</label>
+      <button class="btn ghost" type="button" id="expandpreview" aria-expanded="false">Expand preview</button>
       <button class="btn ghost" type="button" id="copysvg">Copy SVG</button>
     </div>
     <div class="view" id="view"></div>
@@ -185,7 +196,7 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px}
   </div>
 
   <div class="out">
-    <div class="cbar"><span class="k">Output — paste into Figma, layers named by role</span><span class="push"></span><span class="k" id="bytes"></span></div>
+    <div class="cbar"><span class="k">Output — 3D icon only · paste into Figma</span><span class="push"></span><span class="k" id="bytes"></span></div>
     <pre id="code"></pre>
   </div>
 </section>
@@ -272,7 +283,9 @@ function ringsFromSVG(src,tol){
     const f=(el.getAttribute("fill")||cs.fill||"").trim();
     const st=(el.getAttribute("stroke")||cs.stroke||"").trim();
     if((f==="none"||f==="")&&st&&st!=="none") strokeOnly++; else filled++;
-    const m=el.getCTM?el.getCTM():null;
+    // Remove viewport scaling so coordinates retain the SVG's original units.
+    const rootMatrix=svg.getCTM(),elementMatrix=el.getCTM();
+    const m=rootMatrix&&elementMatrix?rootMatrix.inverse().multiply(elementMatrix):null;
     for(const part of pathParts(el)){
     let total=0; try{ total=part.getTotalLength(); }catch(e){ continue; }
     if(!total||!isFinite(total)) continue;
@@ -289,13 +302,15 @@ function ringsFromSVG(src,tol){
     if(cur.length>2) rings.push(cur);
     }
   }
+  const origin={x:svg.viewBox.baseVal.x,y:svg.viewBox.baseVal.y};
   stage.innerHTML="";
   if(!rings.length) return {rings:[],err:"Couldn't trace any outline in that SVG."};
   /* normalise to a 0–100 box so the detail tolerance means the same thing for any icon */
   const b=bbox(rings), k=100/Math.max(b.w,b.h||1);
   const norm=rings.map(r=>r.map(p=>({x:(p.x-b.x0)*k,y:(p.y-b.y0)*k})));
   const clean=norm.map(r=>rdp(dedupe(r),tol)).filter(r=>r.length>2);
-  return {rings:clean,strokeOnly,filled};
+  const sourceRings=rings.map(r=>rdp(dedupe(r),tol/k)).filter(r=>r.length>2);
+  return {rings:clean,sourceRings,origin,strokeOnly,filled};
 }
 function dedupe(r){const o=[r[0]];for(let i=1;i<r.length;i++){const p=r[i],q=o[o.length-1];if(Math.hypot(p.x-q.x,p.y-q.y)>1e-4)o.push(p);}
   if(o.length>2&&Math.hypot(o[0].x-o[o.length-1].x,o[0].y-o[o.length-1].y)<1e-4)o.pop();return o;}
@@ -400,6 +415,7 @@ function orderedWalls(runs,depth,near,far,stroke,vb){
 
 function build(){
   const mode=state.mode;
+  const sourceGrid=mode==="extrude"&&$("sizing").value==="source";
   const cw=+$("cw").value, ch=+$("ch").value, depth=+$("depth").value;
   const snap=+$("snap").value, tol=+$("detail").value;
   const sc=SLATE[$("scale").value], bgs=+$("bgstep").value;
@@ -416,7 +432,10 @@ function build(){
 
   if(mode==="extrude"){
     const s=ringsFromSVG(src,tol);
-    if(s.err){err=s.err;rings=[];} else {rings=s.rings;strokeOnly=s.strokeOnly;}
+    if(s.err){err=s.err;rings=[];} else {
+      rings=sourceGrid?s.sourceRings.map(r=>r.map(p=>({x:p.x-s.origin.x,y:p.y-s.origin.y}))):s.rings;
+      strokeOnly=s.strokeOnly;
+    }
   }else{
     rings=[[{x:0,y:0},{x:cw,y:0},{x:cw,y:ch},{x:0,y:ch}]];
   }
@@ -439,8 +458,17 @@ function build(){
     const a=angle*Math.PI/180,c=Math.cos(a),s=Math.sin(a);
     rings=rings.map(r=>r.map(p=>({x:p.x*c-p.y*s,y:p.x*s+p.y*c})));
     note.push(["Orientation",rotation==="auto"?`auto · ${f2(angle)}°`:`${angle}°`]);
-    const b=bbox(rings), k=cw/Math.max(b.w,b.h||1);
-    rings=rings.map(r=>r.map(p=>({x:(p.x-b.x0)*k,y:(p.y-b.y0)*k})));
+    if(sourceGrid){
+      const unit=Number($("sourcecell").value);
+      if(!Number.isFinite(unit)||unit<=0)return {err:"Enter a positive source-pixel size for one grid cell.",svg:""};
+      rings=rings.map(r=>r.map(p=>({x:p.x/unit,y:p.y/unit})));
+      note.push(["Source grid",`${unit} px = 1 cell · frame origin preserved`]);
+      const offGrid=rings.flat().filter(p=>Math.abs(p.x-Math.round(p.x))>1e-5||Math.abs(p.y-Math.round(p.y))>1e-5).length;
+      if(offGrid&&snap===0)note.push(["Off-grid points",`${offGrid} outline points are between whole-cell intersections. Align the source outline, or choose 1 cell snapping to move them.`]);
+    }else{
+      const b=bbox(rings), k=cw/Math.max(b.w,b.h||1);
+      rings=rings.map(r=>r.map(p=>({x:(p.x-b.x0)*k,y:(p.y-b.y0)*k})));
+    }
   }
 
   /* holes by containment parity, then winding: outer +, hole − */
@@ -594,7 +622,18 @@ ${L.join("\n")}
 </svg>`;
   const vcount=prj.reduce((n,r)=>n+r.length,0);
   const topBounds=bbox(prj);
-  return {svg,err,note,vcount,strokeOnly,topW:Math.round(topBounds.w),topH:Math.round(topBounds.h)};
+  const exported=new DOMParser().parseFromString(svg,"image/svg+xml");
+  const exportedRoot=exported.documentElement;
+  for(const id of ["Background","Grid","Ground fade","Ground shadow"]){
+    exportedRoot.querySelector(`[id="${id}"]`)?.remove();
+  }
+  exportedRoot.querySelector('[id="frame"]')?.parentElement.remove();
+  const exportBox=[bb.x0-2,bb.y0-2,bb.w+4,bb.h+4];
+  exportedRoot.setAttribute("viewBox",exportBox.map(f2).join(" "));
+  exportedRoot.setAttribute("width",f2(exportBox[2]));
+  exportedRoot.setAttribute("height",f2(exportBox[3]));
+  const iconSVG=new XMLSerializer().serializeToString(exportedRoot);
+  return {svg,iconSVG,err,note,vcount,strokeOnly,topW:Math.round(topBounds.w),topH:Math.round(topBounds.h)};
 }
 
 function iconBody(src,keep){
@@ -628,7 +667,13 @@ function currentSVG(){
 /* ---------- render ---------- */
 let lastSVG="";
 function render(){
+  $("previewgrid").checked=$("grid").checked;
   const extrude=state.mode==="extrude";
+  const sourceGrid=extrude&&$("sizing").value==="source";
+  $("sizingrow").hidden=!extrude;
+  $("sourcecellrow").hidden=!sourceGrid;
+  $("sourcegridhint").hidden=!sourceGrid;
+  $("cw").closest(".row").hidden=sourceGrid;
   $("ch").closest(".row").hidden=extrude;
   $("rotationrow").hidden=!extrude;
   for(const id of ["ring2","face","iconscale","keepcolor"]) $(id).closest(".row").hidden=extrude;
@@ -639,9 +684,9 @@ function render(){
   const view=$("view");
   if(r.err&&!r.svg){ view.innerHTML=`<p class="warn">${r.err}</p>`; $("code").textContent=""; lastSVG=""; $("bytes").textContent=""; $("vc").textContent="—"; $("tf").textContent="—"; $("notes").textContent=""; $("copysvg").disabled=true; return; }
   $("copysvg").disabled=false;
-  view.innerHTML=r.svg; lastSVG=r.svg;
-  $("code").textContent=r.svg;
-  $("bytes").textContent=(new TextEncoder().encode(r.svg).length/1024).toFixed(1)+" kB";
+  view.innerHTML=r.svg; lastSVG=r.iconSVG;
+  $("code").textContent=r.iconSVG;
+  $("bytes").textContent=(new TextEncoder().encode(r.iconSVG).length/1024).toFixed(1)+" kB";
   $("vc").textContent=r.vcount;
   $("tf").textContent=r.topW+" × "+r.topH;
   const notes=[["Projection","7 across / 4 down · 29.7449°"],
@@ -654,6 +699,14 @@ function render(){
 }
 
 /* ---------- wiring ---------- */
+$("previewgrid").addEventListener("change",()=>{$("grid").checked=$("previewgrid").checked;render();});
+function expandPreview(expand){
+  $("view").closest(".canvas").classList.toggle("expanded",expand);
+  $("expandpreview").textContent=expand?"Exit large preview":"Expand preview";
+  $("expandpreview").setAttribute("aria-expanded",String(expand));
+}
+$("expandpreview").addEventListener("click",()=>expandPreview($("expandpreview").getAttribute("aria-expanded")!=="true"));
+document.addEventListener("keydown",e=>{if(e.key==="Escape")expandPreview(false);});
 $("modehint").textContent="A tile built on the grid with the icon skewed onto a face — the doc's rule: icons keep their own geometry.";
 document.querySelectorAll("#mode button").forEach(b=>b.addEventListener("click",()=>{
   state.mode=b.dataset.m;
@@ -666,7 +719,7 @@ document.querySelectorAll("#mode button").forEach(b=>b.addEventListener("click",
 document.querySelectorAll(".stepper button").forEach(b=>b.addEventListener("click",()=>{
   const f=$(b.dataset.t); f.value=Math.max(+f.min,Math.min(+f.max,+f.value+ +b.dataset.step)); render();
 }));
-["rotation","cw","ch","depth","snap","detail","grid","bgstep","scale","light","hi","accfill","size","ring2","shadow","fade","dash","face","iconscale","keepcolor","preset"]
+["sizing","sourcecell","rotation","cw","ch","depth","snap","detail","grid","bgstep","scale","light","hi","accfill","size","ring2","shadow","fade","dash","face","iconscale","keepcolor","preset"]
   .forEach(id=>$(id).addEventListener("input",render));
 $("svgin").addEventListener("input",()=>{ if($("svgin").value.trim()){$("preset").value="custom";} render(); });
 $("svgfile").addEventListener("change",async e=>{
