@@ -138,6 +138,8 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px}
     <p class="hint" id="sourcegridhint">Source pixels per isometric cell. Align points to your SVG frame's grid; its origin and spacing are preserved.</p>
     <div class="row" id="rotationrow"><label for="rotation">Icon orientation</label>
       <select id="rotation"><option value="auto">Auto align</option><option value="0" selected>Original</option><option value="45">45°</option><option value="90">90°</option><option value="135">135°</option><option value="180">180°</option><option value="225">225°</option><option value="270">270°</option><option value="315">315°</option></select></div>
+    <div class="row"><label for="direction">Direction</label>
+      <select id="direction"><option value="original" selected>Original</option><option value="mirrored">Mirrored</option></select></div>
     <div class="row"><label for="cw">Footprint, cells across</label>
       <div class="stepper"><button type="button" data-step="-1" data-t="cw">−</button><input type="number" id="cw" value="3" min="1" max="24" step="1"><button type="button" data-step="1" data-t="cw">+</button></div></div>
     <div class="row"><label for="ch">Footprint, cells deep</label>
@@ -152,11 +154,9 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px}
     <legend><span class="sect">Light &amp; palette<s></s></span></legend>
     <div class="row"><label for="bgstep">Background step</label>
       <select id="bgstep"><option>1</option><option selected>2</option><option>3</option><option>4</option></select></div>
-    <p class="hint">Faces are offsets from it: top −1, left ±0, right +1.</p>
+    <p class="hint">Light is fixed at top left. Faces: top −1, left ±0, right +1.</p>
     <div class="row"><label for="scale">Slate scale</label>
       <select id="scale"><option value="light" selected>Light</option><option value="dark">Dark</option></select></div>
-    <div class="row"><label for="light">Light from</label>
-      <select id="light"><option value="tl" selected>Top left</option><option value="tr">Top right</option></select></div>
     <div class="row"><label for="hi">Highlighted object</label><input type="checkbox" id="hi"></div>
     <div class="row"><label for="accfill">Accent fill</label><input type="checkbox" id="accfill"></div>
     <div class="row"><label for="size">Relative size</label>
@@ -400,7 +400,7 @@ function build(){
   const tok=n=>sc[Math.max(1,Math.min(12,n))];
   const BG=tok(bgs), TOP=tok(bgs-1), NEAR=tok(bgs), FAR=tok(bgs+1);
   const STROKE=tok(7), OUT9=tok(9), INSET=tok(5), SHAD=tok(4), FADE=tok(8);
-  const flip=$("light").value==="tr";
+  const flip=$("direction").value==="mirrored";
   const hi=$("hi").checked, accFill=$("accfill").checked;
   const accent=$("size").value==="small"?CLOUD[5]:CLOUD[3];
   const outline=hi?OUT9:STROKE;
@@ -529,7 +529,7 @@ function build(){
 
   /* shadow */
   if($("shadow").checked){
-    const off=flip?{x:-AX.x,y:AX.y}:AX;
+    const off=AX; // Fixed top-left light casts its shadow down and right.
     L.push(`<path id="Ground shadow" d="${prj.map(r=>polyD(r.map(p=>({x:p.x+off.x,y:p.y+D+off.y})))).join(" ")}" fill="${SHAD}" fill-rule="evenodd"/>`);
     note.push(["Shadow offset","1 cell — not specified in the doc"]);
   }
@@ -690,7 +690,7 @@ document.querySelectorAll("#mode button").forEach(b=>b.addEventListener("click",
 document.querySelectorAll(".stepper button").forEach(b=>b.addEventListener("click",()=>{
   const f=$(b.dataset.t); f.value=Math.max(+f.min,Math.min(+f.max,+f.value+ +b.dataset.step)); render();
 }));
-["sizing","sourcecell","rotation","cw","ch","depth","grid","bgstep","scale","light","hi","accfill","size","ring2","shadow","fade","dash","face","iconscale","keepcolor","preset"]
+["sizing","sourcecell","rotation","cw","ch","depth","grid","bgstep","scale","direction","hi","accfill","size","ring2","shadow","fade","dash","face","iconscale","keepcolor","preset"]
   .forEach(id=>$(id).addEventListener("input",render));
 $("svgin").addEventListener("input",()=>{ if($("svgin").value.trim()){$("preset").value="custom";} render(); });
 $("svgfile").addEventListener("change",async e=>{
