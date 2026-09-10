@@ -127,6 +127,8 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px}
 
   <fieldset>
     <legend><span class="sect">Grid<s></s></span></legend>
+    <div class="row" id="rotationrow"><label for="rotation">Icon orientation</label>
+      <select id="rotation"><option value="auto">Auto align</option><option value="0">Original</option><option value="45">45°</option><option value="90">90°</option><option value="135">135°</option><option value="180">180°</option><option value="225">225°</option><option value="270">270°</option><option value="315">315°</option></select></div>
     <div class="row"><label for="cw">Footprint, cells across</label>
       <div class="stepper"><button type="button" data-step="-1" data-t="cw">−</button><input type="number" id="cw" value="3" min="1" max="24" step="1"><button type="button" data-step="1" data-t="cw">+</button></div></div>
     <div class="row"><label for="ch">Footprint, cells deep</label>
@@ -135,7 +137,7 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px}
       <div class="stepper"><button type="button" data-step="-1" data-t="depth">−</button><input type="number" id="depth" value="1" min="0" max="24" step="1"><button type="button" data-step="1" data-t="depth">+</button></div></div>
     <p class="hint">Depth is whole cells only — 1 cell = 32px vertical, so every corner lands on an intersection.</p>
     <div class="row"><label for="snap">Snap outline to</label>
-      <select id="snap"><option value="0">Off</option><option value="0.25" selected>¼ cell</option><option value="0.5">½ cell</option><option value="1">1 cell</option></select></div>
+      <select id="snap"><option value="0" selected>Off</option><option value="0.25">¼ cell</option><option value="0.5">½ cell</option><option value="1">1 cell</option></select></div>
     <div class="row"><label for="detail">Curve detail</label><input type="range" id="detail" min="0.15" max="3" step="0.05" value="0.7"></div>
     <div class="row"><label for="grid">Show grid</label><input type="checkbox" id="grid" checked></div>
   </fieldset>
@@ -211,6 +213,47 @@ const $=id=>document.getElementById(id);
 const state={mode:"extrude"};
 
 /* ---------- sampling: SVG -> rings of points ---------- */
+// Trace each SVG subpath independently, including relative moveto commands.
+// Distance jumps are not a reliable way to distinguish disconnected outlines.
+function pathParts(el){
+  if(el.localName!=="path") return [el];
+  const parts=(el.getAttribute("d")||"").match(/[Mm][^Mm]*/g)||[];
+  const out=[]; let end={x:0,y:0};
+  for(let d of parts){
+    if(d[0]==="m"){
+      const match=d.slice(1).match(/^\s*([+-]?(?:\d*\.\d+|\d+\.?\d*)(?:e[+-]?\d+)?)\s*,?\s*([+-]?(?:\d*\.\d+|\d+\.?\d*)(?:e[+-]?\d+)?)/i);
+      if(!match) continue;
+      const tail=d.slice(1+match[0].length);
+      d=`M${end.x+Number(match[1])} ${end.y+Number(match[2])}${/^\s*,?\s*[+\-.\d]/.test(tail)?' l':''}${tail.replace(/^\s*,/,' ')}`;
+    }
+    const p=document.createElementNS("http://www.w3.org/2000/svg","path");
+    p.setAttribute("d",d);
+    try{end=p.getPointAtLength(p.getTotalLength());out.push(p);}catch(e){}
+  }
+  return out;
+}
+
+function straightPathPoints(el){
+  if(el.localName!=="path")return null;
+  const tokens=(el.getAttribute("d")||"").match(/[+-]?(?:\d*\.\d+|\d+\.?\d*)(?:e[+-]?\d+)?|[a-z]/gi)||[];
+  if(tokens.some(t=>/^[a-z]$/i.test(t)&&!/[mlhvz]/i.test(t)))return null;
+  const out=[];let i=0,cmd="",x=0,y=0,start=null;
+  while(i<tokens.length){
+    if(/^[a-z]$/i.test(tokens[i]))cmd=tokens[i++];
+    const c=cmd.toUpperCase(),relative=cmd!==c;
+    if(c==="Z"){if(start){x=start.x;y=start.y;}cmd="";continue;}
+    const count=c==="H"||c==="V"?1:2;
+    if(!cmd||i+count>tokens.length||tokens.slice(i,i+count).some(t=>!Number.isFinite(Number(t))))return null;
+    const a=Number(tokens[i++]),b=count===2?Number(tokens[i++]):0;
+    if(c==="H")x=relative?x+a:a;
+    else if(c==="V")y=relative?y+a:a;
+    else{x=relative?x+a:a;y=relative?y+b:b;}
+    out.push({x,y});
+    if(c==="M"){start={x,y};cmd=relative?"l":"L";}
+  }
+  return out;
+}
+
 function ringsFromSVG(src,tol){
   const stage=$("stage"); stage.innerHTML="";
   let doc;
@@ -229,21 +272,22 @@ function ringsFromSVG(src,tol){
     const f=(el.getAttribute("fill")||cs.fill||"").trim();
     const st=(el.getAttribute("stroke")||cs.stroke||"").trim();
     if((f==="none"||f==="")&&st&&st!=="none") strokeOnly++; else filled++;
-    let total=0; try{ total=el.getTotalLength(); }catch(e){ continue; }
+    const m=el.getCTM?el.getCTM():null;
+    for(const part of pathParts(el)){
+    let total=0; try{ total=part.getTotalLength(); }catch(e){ continue; }
     if(!total||!isFinite(total)) continue;
     const step=Math.max(total/2400,0.4);
-    const m=el.getCTM?el.getCTM():null;
-    let cur=[],prev=null;
-    for(let d=0;d<=total;d+=step){
-      let p; try{ p=el.getPointAtLength(d); }catch(e){ break; }
-      const raw={x:p.x,y:p.y};
+    let cur=[];
+    const samples=Math.ceil(total/step);
+    const exact=straightPathPoints(part);
+    for(let i=0;i<(exact?exact.length:samples+1);i++){
+      let p; try{ p=exact?exact[i]:part.getPointAtLength(total*i/samples); }catch(e){ break; }
       let x=p.x,y=p.y;
       if(m){ const nx=m.a*x+m.c*y+m.e, ny=m.b*x+m.d*y+m.f; x=nx; y=ny; }
-      /* jump detection happens in the element's own units, before the CTM scales them */
-      if(prev&&Math.hypot(raw.x-prev.x,raw.y-prev.y)>step*6){ if(cur.length>2)rings.push(cur); cur=[]; }
-      cur.push({x,y}); prev=raw;
+      cur.push({x,y});
     }
     if(cur.length>2) rings.push(cur);
+    }
   }
   stage.innerHTML="";
   if(!rings.length) return {rings:[],err:"Couldn't trace any outline in that SVG."};
@@ -277,7 +321,7 @@ function inside(pt,r){let c=false;for(let i=0,j=r.length-1;i<r.length;j=i++){con
 function bbox(rings){let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(const r of rings)for(const p of r){
   if(p.x<x0)x0=p.x;if(p.y<y0)y0=p.y;if(p.x>x1)x1=p.x;if(p.y>y1)y1=p.y;}return{x0,y0,x1,y1,w:x1-x0,h:y1-y0};}
 function project(u,v){return{x:u*AX.x+v*BX.x, y:u*AX.y+v*BX.y};}
-function snapPt(p,g){ if(!g) return {x:Math.round(p.x),y:Math.round(p.y)};
+function snapPt(p,g){ if(!g) return {x:p.x,y:p.y};
   let u=(p.x/AX.x+p.y/AX.y)/2, v=(p.y/AX.y-p.x/AX.x)/2;
   u=Math.round(u/g)*g; v=Math.round(v/g)*g;
   const q=project(u,v); return {x:Math.round(q.x),y:Math.round(q.y)};}
@@ -323,6 +367,37 @@ function roundedD(r,radii){
 }
 
 /* ---------- the build ---------- */
+// At a given screen x, the wall with the larger top-edge y is closer.
+// Clip into x intervals so disconnected/concave outlines occlude correctly.
+function orderedWalls(runs,depth,near,far,stroke,vb){
+  if(!depth||!runs.length) return "";
+  const xs=[...new Set(runs.flatMap(r=>r.top.map(p=>p.x)))].sort((a,b)=>a-b);
+  const bands=[];
+  for(let i=0;i<xs.length-1;i++){
+    const left=xs[i],right=xs[i+1]; if(right-left<1e-6)continue;
+    const x=(left+right)/2, active=[];
+    runs.forEach((r,id)=>{
+      for(let j=0;j<r.top.length-1;j++){
+        const p=r.top[j],q=r.top[j+1];
+        if(x>Math.min(p.x,q.x)&&x<Math.max(p.x,q.x)){
+          active.push({id,y:p.y+(q.y-p.y)*(x-p.x)/(q.x-p.x)});break;
+        }
+      }
+    });
+    active.sort((a,b)=>a.y-b.y||a.id-b.id);
+    const ids=active.map(a=>a.id),key=ids.join(","),prev=bands[bands.length-1];
+    if(prev&&prev.key===key)prev.right=right;
+    else bands.push({left,right,ids,key});
+  }
+  return bands.map((b,i)=>{
+    const paths=b.ids.map(id=>{
+      const r=runs[id],points=r.top.concat(r.top.slice().reverse().map(p=>({x:p.x,y:p.y+depth})));
+      return `<path data-face="${r.side}" d="${polyD(points)}" fill="${r.side==='near'?near:far}" stroke="${stroke}" stroke-width="1" stroke-linejoin="round"/>`;
+    }).join("");
+    return `<defs><clipPath id="wall-band-${i}"><rect x="${f2(b.left-.01)}" y="${vb[1]}" width="${f2(b.right-b.left+.02)}" height="${vb[3]}"/></clipPath></defs><g clip-path="url(#wall-band-${i})">${paths}</g>`;
+  }).join("");
+}
+
 function build(){
   const mode=state.mode;
   const cw=+$("cw").value, ch=+$("ch").value, depth=+$("depth").value;
@@ -349,6 +424,21 @@ function build(){
 
   /* normalise into cell units, cw cells across the widest axis */
   if(mode==="extrude"){
+    const rotation=$("rotation").value;
+    let angle=Number(rotation)||0;
+    if(rotation==="auto"){
+      let sx=0,sy=0,weight=0;
+      for(const r of rings) for(let i=0;i<r.length;i++){
+        const p=r[i],q=r[(i+1)%r.length],dx=q.x-p.x,dy=q.y-p.y;
+        const w=Math.hypot(dx,dy),a=Math.atan2(dy,dx);
+        sx+=w*Math.cos(4*a);sy+=w*Math.sin(4*a);weight+=w;
+      }
+      // Only auto-align outlines with a clear pair of perpendicular directions.
+      if(weight&&Math.hypot(sx,sy)/weight>.75) angle=-Math.atan2(sy,sx)*45/Math.PI;
+    }
+    const a=angle*Math.PI/180,c=Math.cos(a),s=Math.sin(a);
+    rings=rings.map(r=>r.map(p=>({x:p.x*c-p.y*s,y:p.x*s+p.y*c})));
+    note.push(["Orientation",rotation==="auto"?`auto · ${f2(angle)}°`:`${angle}°`]);
     const b=bbox(rings), k=cw/Math.max(b.w,b.h||1);
     rings=rings.map(r=>r.map(p=>({x:(p.x-b.x0)*k,y:(p.y-b.y0)*k})));
   }
@@ -371,7 +461,7 @@ function build(){
 
   const D=depth*VZ;
   /* walls: contiguous runs of edges whose extruded quad faces the viewer */
-  const wallsNear=[], wallsFar=[];
+  const wallsNear=[], wallsFar=[],wallRuns=[];
   for(const r of prj){
     const n=r.length, seg=[];
     for(let i=0;i<n;i++){
@@ -393,6 +483,7 @@ function build(){
     if(cur)runs.push(cur);
     if(D>0) for(const run of runs){
       const top=run.pts, bot=top.slice().reverse().map(p=>({x:p.x,y:p.y+D}));
+      wallRuns.push({top,side:run.side});
       (run.side==="near"?wallsNear:wallsFar).push(top.concat(bot));
     }
   }
@@ -449,8 +540,11 @@ function build(){
 
   /* faces */
   const fillNear=accFill?accent:NEAR, fillFar=accFill?accent:FAR, fillTop=accFill?accent:TOP;
-  if(wallsFar.length) L.push(`<g id="Face away from light" fill="${fillFar}" stroke="${STROKE}" stroke-width="1" stroke-linejoin="round">${wallsFar.map(w=>`<path d="${polyD(w)}"/>`).join("")}</g>`);
-  if(wallsNear.length) L.push(`<g id="Face toward light" fill="${fillNear}" stroke="${STROKE}" stroke-width="1" stroke-linejoin="round">${wallsNear.map(w=>`<path d="${polyD(w)}"/>`).join("")}</g>`);
+  if(mode==="extrude") L.push(`<g id="Depth sorted side faces">${orderedWalls(wallRuns,D,fillNear,fillFar,STROKE,vb)}</g>`);
+  else{
+    if(wallsFar.length) L.push(`<g id="Face away from light" fill="${fillFar}" stroke="${STROKE}" stroke-width="1" stroke-linejoin="round">${wallsFar.map(w=>`<path d="${polyD(w)}"/>`).join("")}</g>`);
+    if(wallsNear.length) L.push(`<g id="Face toward light" fill="${fillNear}" stroke="${STROKE}" stroke-width="1" stroke-linejoin="round">${wallsNear.map(w=>`<path d="${polyD(w)}"/>`).join("")}</g>`);
+  }
   L.push(`<path id="Top face" d="${topD}" fill="${fillTop}" fill-rule="evenodd" stroke="${STROKE}" stroke-width="1" stroke-linejoin="round"/>`);
 
   /* inset ring — spec'd for a rectangular top face only */
@@ -536,6 +630,7 @@ let lastSVG="";
 function render(){
   const extrude=state.mode==="extrude";
   $("ch").closest(".row").hidden=extrude;
+  $("rotationrow").hidden=!extrude;
   for(const id of ["ring2","face","iconscale","keepcolor"]) $(id).closest(".row").hidden=extrude;
   $("modehint").textContent=extrude
     ? "Your icon's silhouette becomes the 3D object, with 7:4 projection, extrusion and Slate face shading. Upload an SVG to replace the example."
@@ -551,7 +646,7 @@ function render(){
   $("tf").textContent=r.topW+" × "+r.topH;
   const notes=[["Projection","7 across / 4 down · 29.7449°"],
     ["Depth",$("depth").value+" × 32px, whole cells"],
-    ["Snap",$("snap").value==="0"?"integer px":$("snap").options[$("snap").selectedIndex].text+" intersections"],
+    ["Snap",$("snap").value==="0"?"off · preserve outline":$("snap").options[$("snap").selectedIndex].text+" intersections"],
     ...(r.note||[])];
   if(state.mode==="extrude"&&r.strokeOnly) notes.push(["Outline strokes",`${r.strokeOnly} stroke-only path(s). Outline strokes in your design tool and upload again to give the icon solid thickness.`]);
   if(r.err) notes.push(["Note",r.err]);
@@ -571,7 +666,7 @@ document.querySelectorAll("#mode button").forEach(b=>b.addEventListener("click",
 document.querySelectorAll(".stepper button").forEach(b=>b.addEventListener("click",()=>{
   const f=$(b.dataset.t); f.value=Math.max(+f.min,Math.min(+f.max,+f.value+ +b.dataset.step)); render();
 }));
-["cw","ch","depth","snap","detail","grid","bgstep","scale","light","hi","accfill","size","ring2","shadow","fade","dash","face","iconscale","keepcolor","preset"]
+["rotation","cw","ch","depth","snap","detail","grid","bgstep","scale","light","hi","accfill","size","ring2","shadow","fade","dash","face","iconscale","keepcolor","preset"]
   .forEach(id=>$(id).addEventListener("input",render));
 $("svgin").addEventListener("input",()=>{ if($("svgin").value.trim()){$("preset").value="custom";} render(); });
 $("svgfile").addEventListener("change",async e=>{
