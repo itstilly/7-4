@@ -418,6 +418,19 @@ function build(){
 
   /* normalise into cell units, cw cells across the widest axis */
   if(mode==="extrude"){
+    // Restore automatic alignment for diagonal, rectilinear icons before projection.
+    // This is a rigid rotation: no snapping, simplification, or outline edits.
+    let sx=0,sy=0,weight=0;
+    for(const r of rings) for(let i=0;i<r.length;i++){
+      const p=r[i],q=r[(i+1)%r.length],dx=q.x-p.x,dy=q.y-p.y;
+      const w=Math.hypot(dx,dy),a=Math.atan2(dy,dx);
+      sx+=w*Math.cos(4*a);sy+=w*Math.sin(4*a);weight+=w;
+    }
+    if(weight&&Math.hypot(sx,sy)/weight>.75){
+      const angle=-Math.atan2(Math.abs(sy)<weight*1e-10?0:sy,sx)/4;
+      const c=Math.cos(angle),s=Math.sin(angle);
+      rings=rings.map(r=>r.map(p=>({x:p.x*c-p.y*s,y:p.x*s+p.y*c})));
+    }
     if(sourceGrid){
       const unit=Number($("sourcecell").value);
       if(!Number.isFinite(unit)||unit<=0)return {err:"Enter a positive source-pixel size for one grid cell.",svg:""};
